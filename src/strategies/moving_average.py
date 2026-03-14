@@ -7,7 +7,7 @@ Generates buy and sell signals based on the crossover of short-term and long-ter
 #Third party libraries
 import pandas as pd
 
-def generate_signal(df, short_window=9, long_window=21):
+def generate_signals(df, short_window=9, long_window=21):
     """
     Generates buy and sell signals based on moving average crossover.
 
