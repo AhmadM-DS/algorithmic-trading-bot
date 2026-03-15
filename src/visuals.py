@@ -6,6 +6,7 @@ Responsible for visualizing stock data and trading signals using Matplotlib.
 #Third party libraries
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 
 def plot_signals(signals, ticker):
     """
@@ -38,4 +39,27 @@ def plot_signals(signals, ticker):
     ax.set_xlabel("Date")
     ax.set_ylabel("Price")
     ax.legend()
+    plt.show()
+
+def plot_portfolio_growth(results, stock):
+    """
+    Plots the growth of the portfolio over time based on the backtest results.
+
+    Parameters:
+        results: A dictionary containing the results of the backtest, including the trades and their profits.
+    """
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+
+    trades_df = results["trades"]
+    sells = trades_df[trades_df["Type"] == "Sell"]
+    portfolio_value = results["starting_capital"] + sells["Profit"].cumsum()
+
+    ax.plot(sells["Date"], portfolio_value, label="Portfolio Value", alpha=0.5)
+
+    ax.set_title(f"Portfolio growth over time for {stock}")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Amount")
+    ax.legend()
+    plt.xticks(rotation=45)
     plt.show()
