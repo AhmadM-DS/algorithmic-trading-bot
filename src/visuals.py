@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-def plot_signals(signals, ticker):
+def plot_signals(signals, ticker, strategy, column1, column2, label1, label2):
     """
     Plots the stock price along with buy and sell signals.
     
@@ -18,12 +18,12 @@ def plot_signals(signals, ticker):
     """
 
     #Plot closing price with moving averages and signals
-    fig, ax = plt.subplots(figsize=(14, 7))
+    _, ax = plt.subplots(figsize=(14, 7))
 
     #Plot closing price and moving averages
     ax.plot(signals["Date"], signals["Close"], label="Close Price", alpha=0.5)
-    ax.plot(signals["Date"], signals["short_ma"], label="9-day MA", alpha=0.8)
-    ax.plot(signals["Date"], signals["long_ma"], label="21-day MA", alpha=0.8)
+    ax.plot(signals["Date"], signals[column1], label=label1, alpha=0.8)
+    ax.plot(signals["Date"], signals[column2], label=label2, alpha=0.8)
 
     #Plot buy signals
     ax.scatter(signals.loc[signals["signal"] == 1, "Date"],
@@ -35,7 +35,7 @@ def plot_signals(signals, ticker):
             signals.loc[signals["signal"] == -1, "Close"], 
             marker="v", color="red", label="Sell", zorder=5)
 
-    ax.set_title(f"{ticker} Moving Average Crossover Strategy")
+    ax.set_title(f"{ticker} {strategy} Strategy")
     ax.set_xlabel("Date")
     ax.set_ylabel("Price")
     ax.legend()
