@@ -30,5 +30,6 @@ def generate_signals(df, short_window=12, long_window=26, signal_window=9):
     df["signal"] = 0
     df.loc[df["macd_line"] > df["signal_line"], "signal"] = 1
     df.loc[df["macd_line"] < df["signal_line"], "signal"] = -1
+    df.loc[df["signal"] == df["signal"].shift(1), "signal"] = 0
 
     return df    
