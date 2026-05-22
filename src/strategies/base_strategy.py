@@ -59,8 +59,10 @@ class Strategy:
         trades_df = pd.DataFrame(trades)
 
         if os.path.exists(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv"):
+            trades_df["run_date"] = pd.Timestamp.today().date()
             trades_df.to_csv(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv", mode='a', index=False, header=False)
         else:
+            trades_df["run_date"] = pd.Timestamp.today().date()
             trades_df.to_csv(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv", index=False)
 
         #Calculate risk to reward ratio
