@@ -65,21 +65,24 @@ class Strategy:
             trades_df["run_date"] = pd.Timestamp.today().date()
             trades_df.to_csv(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv", index=False)
 
-        #Calculate risk to reward ratio
-        avg_reward = trades_df[trades_df["Profit"] > 0]["Profit"].mean()
-        avg_risk = abs(trades_df[trades_df["Profit"] < 0]["Profit"]).mean() if len(trades_df[trades_df["Profit"] < 0]) > 0 else 0
-        risk_reward_ratio = f"{(avg_reward / avg_risk):.2f}:1" if avg_risk > 0 else "N/A"
-
-        backtest_result_metrics = {
-            "strategy": self.name,
-            "ticker": self.ticker,
-            "starting_capital": self.initial_capital,
-            "final_capital": capital,
-            "total_return": capital - self.initial_capital,
-            "percent_return": (capital - self.initial_capital) / self.initial_capital * 100,
-            "win_rate": len(trades_df[trades_df["Profit"] > 0]) / len(trades_df[trades_df["Type"] == "Sell"]) * 100 if len(trades_df) > 0 else 0,
-            "risk/reward": risk_reward_ratio
-        }
+        if len(trades_df) == 0 or "Profit" not in trades_df.columns:
+            return None
+        else:
+            #Calculate risk to reward ratio
+            avg_reward = trades_df[trades_df["Profit"] > 0]["Profit"].mean()
+            avg_risk = abs(trades_df[trades_df["Profit"] < 0]["Profit"]).mean() if len(trades_df[trades_df["Profit"] < 0]) > 0 else 0
+            risk_reward_ratio = f"{(avg_reward / avg_risk):.2f}:1" if avg_risk > 0 else "N/A"
+            
+            backtest_result_metrics = {
+                "strategy": self.name,
+                "ticker": self.ticker,
+                "starting_capital": self.initial_capital,
+                "final_capital": capital,
+                "total_return": capital - self.initial_capital,
+                "percent_return": (capital - self.initial_capital) / self.initial_capital * 100,
+                "win_rate": len(trades_df[trades_df["Profit"] > 0]) / len(trades_df[trades_df["Type"] == "Sell"]) * 100 if len(trades_df) > 0 else 0,
+                "risk/reward": risk_reward_ratio
+            }
 
         return backtest_result_metrics
     

@@ -18,14 +18,19 @@ def fetch_raw_data(ticker, start_date, end_date):
     #Downloading data using yfinance
     raw_data = yf.download(ticker, start=start_date, end=end_date, auto_adjust=True)
 
-    #Resetting the index and leveling columns
-    raw_data.columns = raw_data.columns.get_level_values(0)
-    raw_data.reset_index(inplace=True)
+    #If the stock has been delisted or no price available, don't save it
+    if raw_data.empty:
+        return None
+    else:
 
-    #Save the raw data to a CSV file for later use
-    raw_data.to_csv(f"../data/raw/{ticker}_raw.csv", index=False)
+        #Resetting the index and leveling columns
+        raw_data.columns = raw_data.columns.get_level_values(0)
+        raw_data.reset_index(inplace=True)
 
-    return raw_data
+        #Save the raw data to a CSV file for later use
+        raw_data.to_csv(f"../data/raw/{ticker}_raw.csv", index=False)
+
+        return raw_data
 
 def clean_data(ticker):
     """
