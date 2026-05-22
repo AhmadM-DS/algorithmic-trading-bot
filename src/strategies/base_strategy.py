@@ -127,7 +127,7 @@ class Strategy:
 
         ax.plot(sells["Date"], portfolio_value, label="Portfolio Value", alpha=0.5)
 
-        ax.set_title(f"Portfolio growth over time for {self.ticker}")
+        ax.set_title(f"Portfolio Growth over time for {self.ticker}-{self.name}")
         ax.set_xlabel("Date")
         ax.set_ylabel("Amount")
         ax.legend()
