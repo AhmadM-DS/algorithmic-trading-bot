@@ -29,6 +29,10 @@ class Strategy:
         #Force child to define custom signals
         raise NotImplementedError
     
+    def get_latest_signal(self):
+        self.generate_signals()
+        return self.df.iloc[-1]["signal"]
+    
     def backtest(self):
         """
         Backtests a trading strategy based on generated signals and calculates the portfolio value over time.

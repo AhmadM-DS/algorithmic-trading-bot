@@ -5,7 +5,7 @@ Generates buy and sell signals based on the crossover of short-term and long-ter
 """
 
 #Local imports
-from src.strategies.base_strategy import Strategy
+from strategies.base_strategy import Strategy
 
 #Third party libraries
 import pandas as pd
