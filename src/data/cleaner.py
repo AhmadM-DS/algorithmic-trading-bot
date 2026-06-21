@@ -7,6 +7,10 @@ and preparing it for use in trading strategies.
 import yfinance as yf
 import pandas as pd
 
+#Local imports
+from logger import get_logger
+logger = get_logger(__name__)
+
 def fetch_raw_data(ticker, start_date, end_date):
     """
     Fetches historical stock data from Yahoo Finance for a given ticker symbol and date range.
@@ -20,6 +24,7 @@ def fetch_raw_data(ticker, start_date, end_date):
 
     #If the stock has been delisted or no price available, don't save it
     if raw_data.empty:
+        logger.warning(f"Cannot download ticker ${ticker} due to delisting or no price available. File not saved.")
         return None
     else:
 
@@ -29,7 +34,7 @@ def fetch_raw_data(ticker, start_date, end_date):
 
         #Save the raw data to a CSV file for later use
         raw_data.to_csv(f"../data/raw/{ticker}_raw.csv", index=False)
-
+        logger.info(f"Ticker ${ticker} has been saved to raw data folder.")
         return raw_data
 
 def clean_data(ticker):
@@ -50,5 +55,6 @@ def clean_data(ticker):
 
     #Save the cleaned data to a new CSV file
     df.to_csv(f"../data/cleaned/{ticker}_cleaned.csv", index=False)
+    logger.info(f"Ticker ${ticker} has been saved to cleaned data folder.")
 
     return df

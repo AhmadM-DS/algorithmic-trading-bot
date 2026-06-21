@@ -10,6 +10,10 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
+#Local imports
+from logger import get_logger
+logger = get_logger(__name__)
+
 class Strategy:
     #Every strategy will inherit from this parent class
     def __init__(self, name, df, ticker, initial_capital):
@@ -71,10 +75,13 @@ class Strategy:
             combined = pd.concat([old, trades_df])
             combined = combined.drop_duplicates(subset=["strategy", "ticker", "Date", "Type"])
             combined.to_csv(htl_path, index=False)
+            logger.info("Successfully appended new trades to the existing historical trade log.")
         else:
             trades_df.to_csv(htl_path, index=False)
+            logger.info("Initial historical trade log saved.")
 
         if len(trades_df) == 0 or "Profit" not in trades_df.columns:
+            logger.warning(f"Trade log is empty, unable to calculate {self.name} metrics for ${self.ticker}.")
             return None
         else:
             #Calculate risk to reward ratio
@@ -101,8 +108,10 @@ class Strategy:
                 combined = pd.concat([old, metrics_df])
                 combined = combined.drop_duplicates(subset=["strategy", "ticker", "run_date"])
                 combined.to_csv(m_path, index=False)
+                logger.info("Successfully appended new metrics to the existing metrics log.")
             else:
                 metrics_df.to_csv(m_path, index=False)
+                logger.info("Initial metrics log saved.")
 
             return backtest_result_metrics
     
@@ -146,7 +155,8 @@ class Strategy:
         """
         _, ax = plt.subplots(figsize=(14, 7))
 
-        trades_df = pd.read_csv(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv")
+        trades_df = pd.read_csv(f"../trade_logs/historical_trade_log.csv")
+        trades_df = trades_df[(trades_df["ticker"] == self.ticker) & (trades_df["strategy"] == self.name)]
         sells = trades_df[trades_df["Type"] == "Sell"]
         portfolio_value = self.initial_capital + sells["Profit"].cumsum()
 
