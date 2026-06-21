@@ -13,9 +13,11 @@ import matplotlib.pyplot as plt
 #Local imports
 from logger import get_logger
 logger = get_logger(__name__)
+from config import DEFAULT_FILTERS
 
 class Strategy:
     #Every strategy will inherit from this parent class
+    filters = DEFAULT_FILTERS
     def __init__(self, name, df, ticker, initial_capital):
         """
         Parameters:
