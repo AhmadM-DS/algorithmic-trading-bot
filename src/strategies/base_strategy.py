@@ -62,12 +62,17 @@ class Strategy:
         #Convert trades to DataFrame for better visualization
         trades_df = pd.DataFrame(trades)
 
-        if os.path.exists(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv"):
-            trades_df["run_date"] = pd.Timestamp.today().date()
-            trades_df.to_csv(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv", mode='a', index=False, header=False)
+        htl_path = f"../trade_logs/historical_trade_log.csv"
+        trades_df["strategy"] = self.name
+        trades_df["ticker"] = self.ticker
+
+        if os.path.exists(htl_path):
+            old = pd.read_csv(htl_path)
+            combined = pd.concat([old, trades_df])
+            combined = combined.drop_duplicates(subset=["strategy", "ticker", "Date", "Type"])
+            combined.to_csv(htl_path, index=False)
         else:
-            trades_df["run_date"] = pd.Timestamp.today().date()
-            trades_df.to_csv(f"../trade_logs/{self.name}_{self.ticker}_trade_log.csv", index=False)
+            trades_df.to_csv(htl_path, index=False)
 
         if len(trades_df) == 0 or "Profit" not in trades_df.columns:
             return None
@@ -88,7 +93,18 @@ class Strategy:
                 "risk/reward": risk_reward_ratio
             }
 
-        return backtest_result_metrics
+            metrics_df = pd.DataFrame([backtest_result_metrics])
+            m_path = f"../trade_logs/metrics_log.csv"
+            metrics_df["run_date"] = pd.Timestamp.today().date()
+            if os.path.exists(m_path):
+                old = pd.read_csv(m_path)
+                combined = pd.concat([old, metrics_df])
+                combined = combined.drop_duplicates(subset=["strategy", "ticker", "run_date"])
+                combined.to_csv(m_path, index=False)
+            else:
+                metrics_df.to_csv(m_path, index=False)
+
+            return backtest_result_metrics
     
     def plot_signals(self, columns):
         """

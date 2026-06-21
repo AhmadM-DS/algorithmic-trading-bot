@@ -18,7 +18,6 @@ from strategies.moving_average import MovingAverageStrategy
 
 import pandas as pd
 
-
 filters = [
     {"left": "close", "operation": "in_range", "right": [2, 20]},
     {"left": "change", "operation": "greater", "right": 10},
@@ -49,12 +48,18 @@ for ticker in tickers:
     ]
     for strategy in strategies:
         signal = strategy.get_latest_signal()
-        current_price = api.get_latest_trade(ticker).price
-        quantity = int(float(account.buying_power) * 0.25 / current_price)
-
-        if signal == 1:
-            if not is_pdt() and has_buying_power(quantity, current_price):
-                place_market_order(ticker, quantity, side="buy")
-        elif signal == -1:
-            if not is_pdt() and has_position(ticker):
-                place_market_order(ticker, quantity, side="sell")
+        try:
+            current_price = api.get_latest_trade(ticker).price
+            quantity = int(float(account.buying_power) * 0.25 / current_price)
+            if quantity == 0:
+                print("Order not executed: Quantity is 0.")
+                continue
+            if signal == 1:
+                if not is_pdt() and has_buying_power(quantity, current_price):
+                    place_market_order(ticker, quantity, side="buy")
+            elif signal == -1:
+                if not is_pdt() and has_position(ticker):
+                    place_market_order(ticker, quantity, side="sell")
+        except (AttributeError, Exception):
+            print(f"Could not get price of {ticker}, skipping.")
+            continue
