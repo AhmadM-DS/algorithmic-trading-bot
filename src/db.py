@@ -33,13 +33,13 @@ def insert_order(conn, alpaca_order_id, ticker, side, quantity, price, status, p
     return new_id
 
 
-def insert_trade(conn, strategy, ticker, side, quantity, price, order_id, date=None):
+def insert_trade(conn, strategy, ticker, side, quantity, price, trade_type, order_id=None, date=None):
     if date is None:
         date = datetime.now()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO Trades (Strategy, Ticker, Side, Quantity, Price, Date, ORDER_ID) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (strategy, ticker, side, quantity, price, date, order_id)
+        "INSERT INTO Trades (Strategy, Ticker, Side, Quantity, Price, Date, Order_ID, Trade_Type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (strategy, ticker, side, quantity, price, date, order_id, trade_type)
     )
     conn.commit()
 
