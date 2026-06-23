@@ -62,6 +62,7 @@ class Strategy:
                            (self.name, self.ticker)
                            )
             conn.commit()
+            logger.info(f"Cleaned {cursor.rowcount} backtest trades for {self.ticker}")
             #Simulate trades
             for _, row in self.df.iterrows():
                 if row["signal"] == 1 and not position:
@@ -74,7 +75,7 @@ class Strategy:
                     position = False
                     profit = sell_price - buy_price
                     capital += profit
-                    insert_trade(conn, self.name, self.ticker, side="Sell", quantity=1, price=sell_price, trade_type="Backtest", order_id=None, date=row["Date"])
+                    insert_trade(conn, self.name, self.ticker, side="Sell", quantity=1, price=sell_price, trade_type="Backtest", profit=profit, order_id=None, date=row["Date"])
                     trades.append({"Date": row["Date"], "Type": "Sell", "Price": sell_price, "Profit": profit})
             #Convert trades to DataFrame for better visualization
             trades_df = pd.DataFrame(trades)
@@ -144,18 +145,21 @@ class Strategy:
         """
         Plots the growth of the portfolio over time based on the backtest results.
         """
-        _, ax = plt.subplots(figsize=(14, 7))
+        with get_connection() as conn:
+            _, ax = plt.subplots(figsize=(14, 7))
 
-        trades_df = pd.read_csv(f"../trade_logs/historical_trade_log.csv")
-        trades_df = trades_df[(trades_df["ticker"] == self.ticker) & (trades_df["strategy"] == self.name)]
-        sells = trades_df[trades_df["Type"] == "Sell"]
-        portfolio_value = self.initial_capital + sells["Profit"].cumsum()
+            trades_df = pd.read_sql("SELECT Strategy, Ticker, Side, Profit, Trade_Type, Date FROM Trades "
+                                    "WHERE Strategy = ? AND Ticker = ? AND Trade_Type = ?",
+                                    conn,
+                                    params=(self.name, self.ticker, "Backtest"))
+            sells = trades_df[trades_df["Side"] == "Sell"]
+            portfolio_value = self.initial_capital + sells["Profit"].cumsum()
 
-        ax.plot(sells["Date"], portfolio_value, label="Portfolio Value", alpha=0.5)
+            ax.plot(sells["Date"], portfolio_value, label="Portfolio Value", alpha=0.5)
 
-        ax.set_title(f"Portfolio Growth over time for {self.ticker}-{self.name}")
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Amount")
-        ax.legend()
-        plt.xticks(rotation=45)
-        plt.show()
+            ax.set_title(f"Portfolio Growth over time for {self.ticker}-{self.name}")
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Amount")
+            ax.legend()
+            plt.xticks(rotation=45)
+            plt.show()

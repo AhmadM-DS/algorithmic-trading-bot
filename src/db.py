@@ -7,6 +7,10 @@ Connect to SQL Server.
 import pyodbc
 from datetime import datetime
 
+#Local imports
+from logger import get_logger
+logger = get_logger(__name__)
+
 
 def get_connection():
     conn = pyodbc.connect(
@@ -30,17 +34,19 @@ def insert_order(conn, alpaca_order_id, ticker, side, quantity, price, status, p
     )
     new_id = cursor.fetchone()[0]
     conn.commit()
+    logger.info(f"Inserted order {new_id} for {ticker} into TradingBot.Orders")
     return new_id
 
 
-def insert_trade(conn, strategy, ticker, side, quantity, price, trade_type, order_id=None, date=None):
+def insert_trade(conn, strategy, ticker, side, quantity, price, trade_type, profit = None, order_id=None, date=None):
     if date is None:
         date = datetime.now()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO Trades (Strategy, Ticker, Side, Quantity, Price, Date, Order_ID, Trade_Type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (strategy, ticker, side, quantity, price, date, order_id, trade_type)
+        "INSERT INTO Trades (Strategy, Ticker, Side, Quantity, Price, Date, Order_ID, Trade_Type, Profit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (strategy, ticker, side, quantity, price, date, order_id, trade_type, profit)
     )
+    logger.info(f"Inserted trade for {ticker} into TradingBot.Trades")
     conn.commit()
 
 def insert_metrics(conn, strategy, ticker, starting_capital, final_capital, percent_return, win_rate, risk_reward=None, date=None):
@@ -52,6 +58,7 @@ def insert_metrics(conn, strategy, ticker, starting_capital, final_capital, perc
         "VALUES (?,?, ?, ?, ?, ?, ?, ?)",
         (strategy, ticker, starting_capital, final_capital, percent_return, win_rate, risk_reward, date)
     )
+    logger.info(f"Metrics inserted into TradingBot.Metrics for {ticker}")
     conn.commit()
 
 if __name__ == "__main__":
