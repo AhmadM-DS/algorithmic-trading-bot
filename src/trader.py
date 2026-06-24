@@ -5,6 +5,7 @@ Placing an order with Alpaca API.
 
 #Local Import
 from alpaca_client import api, tradeapi
+from db import get_open_orders, update_order_status
 from logger import get_logger
 logger = get_logger(__name__)
 
@@ -64,4 +65,8 @@ def place_market_order(ticker, quantity, side):
     except tradeapi.rest.APIError:
         logger.error(f"Unable to {side} {quantity} shares of ${ticker}. Order Canceled.")
         return {"Order Failed": f"{side} {quantity} shares of ${ticker}"}
-        
+
+def sync_order_statuses(conn):
+    open_orders = api.list_orders(status='open')
+    for order in open_orders:
+        update_order_status(conn, order.id, order.status)

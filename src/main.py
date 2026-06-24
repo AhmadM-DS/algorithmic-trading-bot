@@ -17,8 +17,9 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 # Local Imports
+from db import get_connection
 from alpaca_client import api
-from trader import place_market_order, is_pdt, has_buying_power, has_position
+from trader import place_market_order, is_pdt, has_buying_power, has_position, sync_order_statuses
 from screener import get_tickers
 from data.cleaner import fetch_raw_data, clean_data
 from strategies.base_strategy import Strategy
@@ -72,6 +73,8 @@ def run():
                 except AttributeError:
                     logger.warning(f"Could not get price of {ticker}, skipping.")
                     continue
+        with get_connection() as conn:
+            sync_order_statuses(conn)
     else:
         logger.warning("Market is closed. Skipping run.")
 

@@ -61,9 +61,23 @@ def insert_metrics(conn, strategy, ticker, starting_capital, final_capital, perc
     logger.info(f"Metrics inserted into TradingBot.Metrics for {ticker}")
     conn.commit()
 
+def get_open_orders(conn):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT Alpaca_Order_ID, Status FROM Orders WHERE Status IN ('new', 'pending', 'partially_filled', 'accepted')"
+    )
+    open_order_id = cursor.fetchall()
+    return open_order_id
+
+def update_order_status(conn, alpaca_order_id, status):
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE Orders SET Status = ? WHERE Alpaca_Order_ID = ?",
+        (status, alpaca_order_id)
+    )
+    conn.commit()
+    logger.info(f"Updated {cursor.rowcount} rows to {status} status")
+
 if __name__ == "__main__":
     with get_connection() as conn:
-        """new_id = insert_order(conn, "test123456789", "TLSA", "Sell", 100, 35, "Open")
-        insert_trade(conn, "MACD", "TLSA", "Sell", 100, 36, order_id=new_id)
-        print("Order inserted")"""
         pass
