@@ -3,13 +3,19 @@ cleaner.py
 Responsible for cleaning the data obtained from Yahoo Finance 
 and preparing it for use in trading strategies.
 """
+
+#Standard Library
+from pathlib import Path
+
 #Third party libraries
 import yfinance as yf
 import pandas as pd
 
 #Local imports
 from logger import get_logger
+
 logger = get_logger(__name__)
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 def fetch_raw_data(ticker, start_date, end_date):
     """
@@ -33,7 +39,7 @@ def fetch_raw_data(ticker, start_date, end_date):
         raw_data.reset_index(inplace=True)
 
         #Save the raw data to a CSV file for later use
-        raw_data.to_csv(f"../data/raw/{ticker}_raw.csv", index=False)
+        raw_data.to_csv(BASE_DIR / "data" / "raw" / f"{ticker}_raw.csv", index=False)
         logger.info(f"Ticker ${ticker} has been saved to raw data folder.")
         return raw_data
 
@@ -45,7 +51,7 @@ def clean_data(ticker):
     """
 
     #Load raw data from csv
-    df = pd.read_csv(f"../data/raw/{ticker}_raw.csv")
+    df = pd.read_csv(BASE_DIR / "data" / "raw" / f"{ticker}_raw.csv")
 
     #Drop rows with missing values
     df.dropna(inplace=True)
@@ -54,7 +60,7 @@ def clean_data(ticker):
     df["Date"] = pd.to_datetime(df["Date"])
 
     #Save the cleaned data to a new CSV file
-    df.to_csv(f"../data/cleaned/{ticker}_cleaned.csv", index=False)
+    df.to_csv(BASE_DIR / "data" / "cleaned" / f"{ticker}_cleaned.csv", index=False)
     logger.info(f"Ticker ${ticker} has been saved to cleaned data folder.")
 
     return df

@@ -5,31 +5,12 @@ Placing an order with Alpaca API.
 
 #Local Import
 from alpaca_client import api, tradeapi
-from db import get_open_orders, update_order_status
+from db import update_order_status
+from notifications import send_trades
 from logger import get_logger
 logger = get_logger(__name__)
 
-account = api.get_account()
-
 #Restrictions for placing orders
-def is_pdt():
-    if float(account.portfolio_value) < 25000 and int(account.daytrade_count) >=3:
-        logger.warning("Trade blocked. PDT rule enforced.")
-        return True
-    return False
-
-def has_buying_power(quantity, price):
-    """
-    Parameters:
-        quantity(int): The amount of shares to be bought.
-        price(float): Cost per share.
-    """
-    order_value = quantity * price
-    if float(account.buying_power) < order_value:
-        logger.warning("Trade blocked. Not enough funds.")
-        return False
-    return True
-
 def has_position(ticker):
     """
     Parameters:
@@ -61,12 +42,16 @@ def place_market_order(ticker, quantity, side):
             time_in_force="day"
         )
         logger.info(f"Order to {side} {quantity} shares of ${ticker} has been placed.")
+        send_trades(f"Order to {side} {quantity} shares of ${ticker} has been placed.")
         return {"Order Placed": order}
-    except tradeapi.rest.APIError:
-        logger.error(f"Unable to {side} {quantity} shares of ${ticker}. Order Canceled.")
-        return {"Order Failed": f"{side} {quantity} shares of ${ticker}"}
+    except tradeapi.rest.APIError as e:
+        reason = str(e)
+        logger.error(f"Unable to {side} {quantity} shares of ${ticker}. Reason: {reason}")
+        send_trades(f"Unable to {side} {quantity} shares of ${ticker}. Reason: {reason}")
+        return {"Order Failed": reason}
 
 def sync_order_statuses(conn):
     open_orders = api.list_orders(status='open')
     for order in open_orders:
         update_order_status(conn, order.id, order.status)
+        logger.info(f"Updated {order.id} to {order.status}")

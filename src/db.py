@@ -77,7 +77,3 @@ def update_order_status(conn, alpaca_order_id, status):
     )
     conn.commit()
     logger.info(f"Updated {cursor.rowcount} rows to {status} status")
-
-if __name__ == "__main__":
-    with get_connection() as conn:
-        pass
