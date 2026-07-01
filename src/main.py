@@ -87,6 +87,7 @@ def run():
                 send_critical("No tickers in cache. Cannot run bot. <@375084779256676353>")
                 logger.info("No tickers in cache yet. Skipping run.")
                 return
+            account = api.get_account()
             for ticker in tickers_cache:
                 if os.path.exists(f"data/cleaned/{ticker}_cleaned.csv"):
                     df = pd.read_csv(f"data/cleaned/{ticker}_cleaned.csv")
@@ -106,7 +107,6 @@ def run():
                         continue
                     signal = strategy.get_latest_signal()
                     try:
-                        account = api.get_account()
                         current_price = api.get_latest_trade(ticker).price
                         quantity = int(float(account.buying_power) * 0.25 / current_price)
                         if quantity == 0:
@@ -123,6 +123,7 @@ def run():
                                 signals_executed_today.add(buy_key)
                                 strategy_cost_basis[strategy.name] = strategy_cost_basis.get(strategy.name, 0) + current_price * quantity
                                 strategy_entry_prices[(strategy.name, ticker)] = (current_price, quantity)
+                                account = api.get_account()  # refresh buying power after order
                         elif signal == -1:
                             sell_key = (ticker, strategy.name, "sell")
                             if sell_key in signals_executed_today:
@@ -137,6 +138,7 @@ def run():
                                         entry_price, entry_qty = entry
                                         pnl = (current_price - entry_price) * entry_qty
                                         strategy_realized_pnl[strategy.name] = strategy_realized_pnl.get(strategy.name, 0) + pnl
+                                    account = api.get_account()  # refresh buying power after order
                     except AttributeError:
                         send_critical(f"Could not get price of {ticker}, skipping. <@375084779256676353>")
                         logger.warning(f"Could not get price of {ticker}, skipping.")
