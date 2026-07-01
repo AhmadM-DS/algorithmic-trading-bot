@@ -34,10 +34,49 @@ from notifications import send_critical, send_routine, send_trades
 from logger import get_logger
 logger = get_logger(__name__)
 
+MAX_TICKERS = 20
+PROFIT_TARGET = 0.10    # halt strategy once daily ROI >= +10%
+LOSS_LIMIT    = -0.05   # halt strategy once daily ROI <= -5%
+
 tickers_cache = []
+
+# Per-day state — all reset at 09:30 screener refresh
+signals_executed_today = set()   # (ticker, strategy_name, side) — prevents duplicate orders
+strategy_cost_basis    = {}      # strategy_name -> total capital deployed today ($)
+strategy_realized_pnl  = {}      # strategy_name -> total realized P&L today ($)
+strategy_entry_prices  = {}      # (strategy_name, ticker) -> (entry_price, qty)
+halted_strategies      = set()   # strategies shut off for the rest of the day
+
+def reset_daily_state():
+    signals_executed_today.clear()
+    strategy_cost_basis.clear()
+    strategy_realized_pnl.clear()
+    strategy_entry_prices.clear()
+    halted_strategies.clear()
+
+def is_strategy_halted(name):
+    if name in halted_strategies:
+        return True
+    cost = strategy_cost_basis.get(name, 0)
+    if cost == 0:
+        return False
+    roi = strategy_realized_pnl.get(name, 0) / cost
+    if roi >= PROFIT_TARGET:
+        halted_strategies.add(name)
+        logger.info(f"Strategy {name} halted: profit target reached ({roi:.1%} ROI).")
+        send_routine(f"Strategy {name} halted for today: profit target reached ({roi:.1%} ROI).")
+        return True
+    if roi <= LOSS_LIMIT:
+        halted_strategies.add(name)
+        logger.info(f"Strategy {name} halted: loss limit reached ({roi:.1%} ROI).")
+        send_routine(f"Strategy {name} halted for today: loss limit reached ({roi:.1%} ROI).")
+        return True
+    return False
+
 def refresh_screener():
     global tickers_cache
-    tickers_cache = get_tickers(Strategy.filters)
+    reset_daily_state()
+    tickers_cache = get_tickers(Strategy.filters)[:MAX_TICKERS]
     logger.info(f"Screener refreshed. {len(tickers_cache)} tickers found.")
     send_routine(f"Screener refreshed. Adding the following tickers: {tickers_cache}")
 
@@ -63,6 +102,8 @@ def run():
                     RSIStrategy("RSI", df=df, ticker=ticker, initial_capital=10000)
                 ]
                 for strategy in strategies:
+                    if is_strategy_halted(strategy.name):
+                        continue
                     signal = strategy.get_latest_signal()
                     try:
                         account = api.get_account()
@@ -73,10 +114,29 @@ def run():
                             logger.warning("Order not executed: Quantity is 0.")
                             continue
                         if signal == 1:
-                            place_market_order(ticker, quantity, side="buy")
+                            buy_key = (ticker, strategy.name, "buy")
+                            if buy_key in signals_executed_today:
+                                logger.info(f"Duplicate buy signal skipped: {strategy.name} on {ticker}.")
+                                continue
+                            result = place_market_order(ticker, quantity, side="buy")
+                            if "Order Placed" in result:
+                                signals_executed_today.add(buy_key)
+                                strategy_cost_basis[strategy.name] = strategy_cost_basis.get(strategy.name, 0) + current_price * quantity
+                                strategy_entry_prices[(strategy.name, ticker)] = (current_price, quantity)
                         elif signal == -1:
+                            sell_key = (ticker, strategy.name, "sell")
+                            if sell_key in signals_executed_today:
+                                logger.info(f"Duplicate sell signal skipped: {strategy.name} on {ticker}.")
+                                continue
                             if has_position(ticker):
-                                place_market_order(ticker, quantity, side="sell")
+                                result = place_market_order(ticker, quantity, side="sell")
+                                if "Order Placed" in result:
+                                    signals_executed_today.add(sell_key)
+                                    entry = strategy_entry_prices.pop((strategy.name, ticker), None)
+                                    if entry:
+                                        entry_price, entry_qty = entry
+                                        pnl = (current_price - entry_price) * entry_qty
+                                        strategy_realized_pnl[strategy.name] = strategy_realized_pnl.get(strategy.name, 0) + pnl
                     except AttributeError:
                         send_critical(f"Could not get price of {ticker}, skipping. <@375084779256676353>")
                         logger.warning(f"Could not get price of {ticker}, skipping.")
