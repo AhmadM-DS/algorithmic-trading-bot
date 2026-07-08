@@ -36,7 +36,7 @@ def insert_order(conn, alpaca_order_id, ticker, side, quantity, price, status, p
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO Orders (Alpaca_Order_ID, Ticker, Side, Quantity, Price, Status, Profit, Date) "
-        "OUTPUT INSERTED.ORDER_ID "
+        "OUTPUT INSERTED.Order_ID "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (alpaca_order_id, ticker, side, quantity, price, status, profit, date)
     )
