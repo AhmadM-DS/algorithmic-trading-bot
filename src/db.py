@@ -5,6 +5,7 @@ Connect to SQL Server.
 
 #Third party libraries
 import pyodbc
+import os
 from datetime import datetime
 
 #Local imports
@@ -13,12 +14,19 @@ logger = get_logger(__name__)
 
 
 def get_connection():
+    server = os.getenv("DB_SERVER")
+    database = os.getenv("DB_NAME")
+    username = os.getenv("DB_USER")
+    password = os.getenv("DB_PASSWORD")
+
     conn = pyodbc.connect(
-    "DRIVER={ODBC Driver 18 for SQL Server};"
-    "SERVER=.\\SQLEXPRESS;"
-    "DATABASE=TradingBot;"
-    "Trusted_Connection=yes;"
-    "TrustServerCertificate=yes;"
+        "DRIVER={ODBC Driver 18 for SQL Server};"
+        f"SERVER={server};"
+        f"DATABASE={database};"
+        f"UID={username};"
+        f"PWD={password};"
+        "Encrypt=yes;"
+        "TrustServerCertificate=no;"
     )
     return conn
 
