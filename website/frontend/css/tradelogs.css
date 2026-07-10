@@ -1,0 +1,111 @@
+/* ============================================================
+   tradelogs.css  —  styles ONLY for trade-ogs.html
+   ============================================================ */
+
+.logs-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.logs-count {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.refresh-btn {
+    background: var(--nav-button-color);
+    color: var(--nav-title-color);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+/* ---------- Table ---------- */
+.table-wrap {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.logs-table thead th {
+    text-align: left;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--nav-title-color);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.logs-table thead th:hover {
+    background: rgba(0, 0, 0, 0.07);
+}
+
+.logs-table thead th .arrow {
+    opacity: 0.4;
+    font-size: 0.7rem;
+    margin-left: 4px;
+}
+
+.logs-table tbody td {
+    padding: 11px 16px;
+    border-top: 1px solid var(--card-border);
+    vertical-align: top;
+}
+
+.logs-table tbody tr:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.col-time {
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    width: 1%;
+}
+
+.col-level {
+    width: 1%;
+}
+
+.col-message {
+    color: var(--title-color);
+}
+
+/* ---------- Level badges ---------- */
+.badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge.info    { background: rgba(13, 171, 118, 0.18); color: var(--pl-positive); }
+.badge.warning { background: rgba(230, 180, 30, 0.22); color: #9a7b10; }
+.badge.error   { background: rgba(249, 86, 79, 0.18); color: var(--pl-negative); }
+.badge.debug   { background: rgba(0, 0, 0, 0.06); color: var(--text-muted); }
+
+/* Empty / error state */
+.logs-empty {
+    padding: 30px 16px;
+    text-align: center;
+    color: var(--text-muted);
+}

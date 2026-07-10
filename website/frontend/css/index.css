@@ -1,0 +1,131 @@
+.status-strip {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 16px;
+    color: var(--title-color);
+    font-weight: 600;
+}
+
+
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.kpi-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 18px;
+}
+
+.kpi-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+}
+
+.kpi-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.kpi-value.positive { color: var(--pl-positive); }
+.kpi-value.negative { color: var(--pl-negative); }
+
+
+.clock-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.clock-time {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.clock-date {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 4px 0 0;
+}
+
+
+.section-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.left-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+
+.calendar-weekdays,
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.calendar-weekdays {
+    margin-bottom: 6px;
+}
+
+.weekday {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.day {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    padding: 6px;
+    background: #fff6ea;
+    border: 1px solid var(--card-border);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 0.8rem;
+}
+
+.day.empty {
+    background: transparent;
+    border: none;
+}
+
+.day .date {
+    color: var(--text-muted);
+}
+
+.day .pl {
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+.day.positive { background: rgba(13, 171, 118, 0.18); }
+.day.negative { background: rgba(249, 86, 79, 0.18); }
+.day.positive .pl { color: var(--pl-positive); }
+.day.negative .pl { color: var(--pl-negative); }
+
+@media (max-width: 800px) {
+    .section-grid {
+        grid-template-columns: 1fr;
+    }
+}

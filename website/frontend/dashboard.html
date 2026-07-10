@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard · Noctis</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <!-- Sidebar: same block as other pages, "Dashboard" is active -->
+    <div class="sidenav">
+        <h1 class="logo">Noctis</h1>
+        <p class="tagline">Your friendly<br>trading bot</p>
+
+        <div class="status-list">
+            <p class="status"><span class="dot good"></span>Bot Status</p>
+            <p class="status"><span class="dot good"></span>Server Status</p>
+            <p class="status"><span class="dot good"></span>Web Host Status</p>
+        </div>
+
+        <nav class="nav-buttons">
+            <a href="index.html" class="nav-button">Account Overview</a>
+            <a href="dashboard.html" class="nav-button active">Dashboard</a>
+            <a href="tradelogs.html" class="nav-button">Trade Logs</a>
+            <a href="expenses.html" class="nav-button">Expenses</a>
+        </nav>
+    </div>
+
+    <main class="main">
+        <h2 class="page-title">Dashboard</h2>
+        <p class="page-subtitle">Strategy performance and trend analysis</p>
+
+        <!-- Risk metric KPI cards -->
+        <div class="risk-row">
+            <div class="risk-card">
+                <p class="risk-label">Max Drawdown</p>
+                <p class="risk-value" data-risk="maxDrawdown">—</p>
+            </div>
+            <div class="risk-card">
+                <p class="risk-label">Sharpe Ratio</p>
+                <p class="risk-value" data-risk="sharpe">—</p>
+            </div>
+            <div class="risk-card">
+                <p class="risk-label">Profit Factor</p>
+                <p class="risk-value" data-risk="profitFactor">—</p>
+            </div>
+            <div class="risk-card">
+                <p class="risk-label">Avg Win / Avg Loss</p>
+                <p class="risk-value" data-risk="avgWinLoss">—</p>
+            </div>
+        </div>
+
+        <!-- Slicers -->
+        <div class="slicer-row">
+            <div class="slicer">
+                <label for="strategy-filter">Strategy</label>
+                <select id="strategy-filter">
+                    <option value="all">All Strategies</option>
+                </select>
+            </div>
+            <div class="slicer">
+                <label for="symbol-filter">Symbol</label>
+                <select id="symbol-filter">
+                    <option value="all">All Symbols</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Hero: Equity Curve -->
+        <div class="chart-card">
+            <h3>Equity Curve</h3>
+            <div class="chart-box hero">
+                <canvas id="equityChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Two-up rows -->
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>Cumulative P/L</h3>
+                <div class="chart-box"><canvas id="cumulativeChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h3>Daily P/L</h3>
+                <div class="chart-box"><canvas id="dailyChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>P/L by Strategy</h3>
+                <div class="chart-box"><canvas id="strategyChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h3>P/L by Symbol</h3>
+                <div class="chart-box"><canvas id="symbolChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>Win / Loss Breakdown</h3>
+                <div class="chart-box"><canvas id="winLossChart"></canvas></div>
+            </div>
+            <div></div>
+        </div>
+    </main>
+
+    <!-- Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

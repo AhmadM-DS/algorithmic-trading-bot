@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expenses · Noctis</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/expenses.css">
+</head>
+<body>
+    <!-- Sidebar: same block, "Expenses" is active -->
+    <div class="sidenav">
+        <h1 class="logo">Noctis</h1>
+        <p class="tagline">Your friendly<br>trading bot</p>
+
+        <div class="status-list">
+            <p class="status"><span class="dot good"></span>Bot Status</p>
+            <p class="status"><span class="dot good"></span>Server Status</p>
+            <p class="status"><span class="dot good"></span>Web Host Status</p>
+        </div>
+
+        <nav class="nav-buttons">
+            <a href="index.html" class="nav-button">Account Overview</a>
+            <a href="dashboard.html" class="nav-button">Dashboard</a>
+            <a href="tradelogs.html" class="nav-button">Trade Logs</a>
+            <a href="expenses.html" class="nav-button active">Expenses</a>
+        </nav>
+    </div>
+
+    <main class="main">
+        <h2 class="page-title">Expenses</h2>
+        <p class="page-subtitle">Subscriptions and one-off costs for running the bot</p>
+
+        <!-- Summary cards -->
+        <div class="summary-row">
+            <div class="summary-card">
+                <p class="summary-label">Total Expenses (All Time)</p>
+                <p class="summary-value" id="total-all">$0.00</p>
+            </div>
+            <div class="summary-card">
+                <p class="summary-label">Monthly Recurring</p>
+                <p class="summary-value" id="total-monthly">$0.00</p>
+            </div>
+            <div class="summary-card">
+                <p class="summary-label">This Month's Spend</p>
+                <p class="summary-value" id="total-this-month">$0.00</p>
+            </div>
+        </div>
+
+        <!-- Subscriptions -->
+        <div class="section-heading">
+            <h3>Active Subscriptions</h3>
+            <span class="sub-total" id="subs-count"></span>
+        </div>
+        <div class="table-wrap">
+            <table class="exp-table">
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Provider</th>
+                        <th>Purpose</th>
+                        <th>Cost</th>
+                        <th>Billing Cycle</th>
+                        <th>Monthly Equiv.</th>
+                        <th>Payment</th>
+                        <th>Start Date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="subs-body">
+                    <tr><td colspan="9" class="empty-row">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Expenses -->
+        <div class="section-heading">
+            <h3>Expenses</h3>
+            <span class="sub-total" id="exp-count"></span>
+        </div>
+        <div class="table-wrap">
+            <table class="exp-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Expense</th>
+                        <th>Provider</th>
+                        <th>Purpose</th>
+                        <th>Cost</th>
+                        <th>Payment</th>
+                        <th>Linked Subscription</th>
+                    </tr>
+                </thead>
+                <tbody id="exp-body">
+                    <tr><td colspan="7" class="empty-row">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="js/expenses.js"></script>
+</body>
+</html>

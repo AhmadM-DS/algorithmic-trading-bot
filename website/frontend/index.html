@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Overview · Noctis</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/index.css">
+</head>
+<body>
+    <!-- Sidebar: copy this block into each page, set the .active class -->
+    <div class="sidenav">
+        <h1 class="logo">Noctis</h1>
+        <p class="tagline">Your friendly<br>trading bot</p>
+
+        <div class="status-list">
+            <p class="status"><span class="dot idle"></span>Bot Status</p>
+            <p class="status"><span class="dot good"></span>Server Status</p>
+            <p class="status"><span class="dot bad"></span>Web Host Status</p>
+        </div>
+
+        <nav class="nav-buttons">
+            <a href="index.html" class="nav-button active">Account Overview</a>
+            <a href="dashboard.html" class="nav-button">Dashboard</a>
+            <a href="tradelogs.html" class="nav-button">Trade Logs</a>
+            <a href="expenses.html" class="nav-button">Expenses</a>
+        </nav>
+    </div>
+
+    <main class="main">
+
+        <div class="status-strip">
+            <span>Paper Trading</span>
+            <span>Updates Daily at 3:00 PM</span>
+        </div>
+
+        <div class="kpi-row">
+            <div class="kpi-card">
+                <p class="kpi-label">Account Balance</p>
+                <p class="kpi-value" data-kpi="accountBalance">$0.00</p>
+            </div>
+            <div class="kpi-card">
+                <p class="kpi-label">Daily P/L</p>
+                <p class="kpi-value" data-kpi="dailyPL">$0.00</p>
+            </div>
+            <div class="kpi-card">
+                <p class="kpi-label">Daily Win Rate</p>
+                <p class="kpi-value" data-kpi="winRate">0%</p>
+            </div>
+            <div class="kpi-card">
+                <p class="kpi-label">Trades Today</p>
+                <p class="kpi-value" data-kpi="tradesToday">0</p>
+            </div>
+            <div class="kpi-card">
+                <p class="kpi-label">Today's Profit</p>
+                <p class="kpi-value" data-kpi="todaysProfit">$0.00</p>
+            </div>
+            <div class="kpi-card clock-card">
+                <p class="clock-time" id="clock-time">--:--</p>
+                <p class="clock-date" id="clock-date">--</p>
+            </div>
+        </div>
+
+        <div class="section-grid">
+            <div class="left-column">
+                <div class="panel">
+                    <h3>Stocks Traded Today</h3>
+                    <ul class="data-list" id="stocks-list">
+                        <li><span>—</span><span class="tag">no data</span></li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h3>Strategy Implemented Today</h3>
+                    <ul class="data-list" id="strategy-list">
+                        <li><span>—</span><span class="tag">no data</span></li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h3>Orders (Today)</h3>
+                    <ul class="data-list" id="orders-list">
+                        <li><span>—</span><span class="tag">no data</span></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Profit / Loss Calendar</h3>
+                <div class="calendar-weekdays">
+                    <span class="weekday">Sun</span>
+                    <span class="weekday">Mon</span>
+                    <span class="weekday">Tue</span>
+                    <span class="weekday">Wed</span>
+                    <span class="weekday">Thu</span>
+                    <span class="weekday">Fri</span>
+                    <span class="weekday">Sat</span>
+                </div>
+                <div class="calendar-grid" id="calendar-grid"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/index.js"></script>
+</body>
+</html>

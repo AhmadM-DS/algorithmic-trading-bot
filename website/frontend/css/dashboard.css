@@ -1,0 +1,109 @@
+/* ============================================================
+   dashboard.css  —  styles ONLY for dashboard.html
+   ============================================================ */
+
+/* ---------- Risk KPI cards ---------- */
+.risk-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.risk-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 18px;
+}
+
+.risk-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+}
+
+.risk-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.risk-value.positive { color: var(--pl-positive); }
+.risk-value.negative { color: var(--pl-negative); }
+
+/* ---------- Slicers (Power BI style filters) ---------- */
+.slicer-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+}
+
+.slicer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.slicer label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.slicer select {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--title-color);
+    font-size: 0.9rem;
+    min-width: 160px;
+    cursor: pointer;
+}
+
+/* ---------- Chart cards ---------- */
+.chart-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.chart-card h3 {
+    margin: 0 0 14px;
+    color: var(--nav-title-color);
+}
+
+/* Fixed height so charts don't collapse or grow unbounded */
+.chart-box {
+    position: relative;
+    height: 300px;
+}
+
+.chart-box.hero {
+    height: 340px;
+}
+
+/* Two-up chart grid */
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.chart-grid .chart-card {
+    margin-bottom: 0;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+    .chart-grid {
+        grid-template-columns: 1fr;
+    }
+}
