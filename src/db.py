@@ -1,12 +1,14 @@
 """
 db.py
-Connect to SQL Server.
+Connect to Azure SQL.
 """
 
 #Third party libraries
 import pyodbc
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+load_dotenv()
 
 #Local imports
 from logger import get_logger

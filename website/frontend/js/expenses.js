@@ -1,34 +1,3 @@
-// ============================================================
-//  Noctis · Expenses (frontend only)
-//  Placeholder data mirrors the SQL schema (Subscriptions + Expenses).
-//  Backend hookup marked below.
-// ============================================================
-
-// ---- Placeholder data (matches your SQL columns) ---------------
-const PLACEHOLDER = {
-    subscriptions: [
-        { Service_Name: "Alpaca Markets", Provider: "Alpaca", Purpose: "Brokerage API for trade execution",
-          Cost: 0.00, Billing_Cycle: "Monthly", Payment_Method: "N/A", Start_Date: "2026-01-15", Is_Active: 1 },
-        { Service_Name: "AWS EC2", Provider: "Amazon", Purpose: "Server hosting the bot 24/7",
-          Cost: 18.50, Billing_Cycle: "Monthly", Payment_Method: "Visa ****4821", Start_Date: "2026-01-20", Is_Active: 1 },
-        { Service_Name: "Polygon.io", Provider: "Polygon", Purpose: "Market data feed",
-          Cost: 199.00, Billing_Cycle: "Yearly", Payment_Method: "Visa ****4821", Start_Date: "2026-02-01", Is_Active: 1 },
-        { Service_Name: "Discord Nitro", Provider: "Discord", Purpose: "Alert webhooks / notifications",
-          Cost: 9.99, Billing_Cycle: "Monthly", Payment_Method: "PayPal", Start_Date: "2026-03-10", Is_Active: 0 },
-    ],
-    expenses: [
-        { Date: "2026-07-01", Expense_Name: "AWS EC2 - July", Provider: "Amazon", Purpose: "Monthly server cost",
-          Cost: 18.50, Payment_Method: "Visa ****4821", Subscription: "AWS EC2" },
-        { Date: "2026-06-15", Expense_Name: "Domain renewal", Provider: "Namecheap", Purpose: "noctisbot.com for 1 year",
-          Cost: 12.98, Payment_Method: "Visa ****4821", Subscription: null },
-        { Date: "2026-06-01", Expense_Name: "AWS EC2 - June", Provider: "Amazon", Purpose: "Monthly server cost",
-          Cost: 18.50, Payment_Method: "Visa ****4821", Subscription: "AWS EC2" },
-        { Date: "2026-02-01", Expense_Name: "Polygon annual", Provider: "Polygon", Purpose: "Market data subscription",
-          Cost: 199.00, Payment_Method: "Visa ****4821", Subscription: "Polygon.io" },
-    ],
-};
-
-// ---- Helpers ---------------------------------------------------
 function money(n) {
     return `$${Number(n).toFixed(2)}`;
 }
@@ -49,7 +18,6 @@ function escapeHtml(str) {
         .replace(/>/g, "&gt;");
 }
 
-// ---- Render subscriptions --------------------------------------
 function renderSubscriptions(subs) {
     const body = document.getElementById("subs-body");
     document.getElementById("subs-count").textContent = `${subs.length} total`;
@@ -79,7 +47,6 @@ function renderSubscriptions(subs) {
     }).join("");
 }
 
-// ---- Render expenses -------------------------------------------
 function renderExpenses(expenses) {
     const body = document.getElementById("exp-body");
     document.getElementById("exp-count").textContent = `${expenses.length} total`;
@@ -104,7 +71,6 @@ function renderExpenses(expenses) {
         </tr>`).join("");
 }
 
-// ---- Summary totals --------------------------------------------
 function renderSummary(data) {
     // Total all-time = sum of every expense row
     const totalAll = data.expenses.reduce((sum, e) => sum + Number(e.Cost), 0);
@@ -126,14 +92,15 @@ function renderSummary(data) {
     document.getElementById("total-this-month").textContent = money(thisMonth);
 }
 
-// ---- Data loader (swap in FastAPI later) -----------------------
 async function loadData() {
-    // TODO backend: fetch from FastAPI, which queries SQL Server.
-    // const res = await fetch("/api/expenses");
-    // const data = await res.json();   // { subscriptions: [...], expenses: [...] }
-    // render(data); return;
-
-    render(PLACEHOLDER);
+    try {
+        const res = await fetch("/api/expenses");
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        const data = await res.json();
+        render(data);
+    } catch (err) {
+        console.error("Failed to load expenses:", err);
+    }
 }
 
 function render(data) {
