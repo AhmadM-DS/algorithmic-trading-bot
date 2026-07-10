@@ -1,64 +1,26 @@
-// ============================================================
-//  Noctis · Trade Logs (frontend only)
-//  Reads tradelogs.txt over the local server, shows newest 50.
-//  Log line format:
-//  2026-07-06 14:44:29,757 - INFO - message text here
-// ============================================================
+let logs = [];
+let sortKey = "time";
+let sortDir = "desc";
 
-const LOG_FILE = "../../logs/trading_bot.log";
-const MAX_LINES = 50;
 
-let logs = [];               // parsed log objects
-let sortKey = "time";        // current sort column
-let sortDir = "desc";        // 'asc' | 'desc'
-
-// ---- Parse one line into { time, level, message, raw } ---------
-function parseLine(line) {
-    // Split on the first two " - " separators: TIMESTAMP - LEVEL - MESSAGE
-    const parts = line.split(" - ");
-    if (parts.length >= 3) {
-        return {
-            time: parts[0].trim(),
-            level: parts[1].trim(),
-            message: parts.slice(2).join(" - ").trim(), // message may contain " - "
-            raw: line,
-        };
-    }
-    // Fallback: line doesn't match expected format
-    return { time: "", level: "", message: line.trim(), raw: line };
-}
-
-// ---- Load the file ---------------------------------------------
 async function loadLogs() {
     const countEl = document.getElementById("logs-count");
     try {
-        const res = await fetch(LOG_FILE, { cache: "no-store" });
+        const res = await fetch("/api/tradelogs", { cache: "no-store" });
         if (!res.ok) throw new Error(res.status);
-        const text = await res.text();
+        const data = await res.json();
 
-        const lines = text
-            .split("\n")
-            .map(l => l.trim())
-            .filter(l => l.length > 0);
-
-        // newest lines are at the bottom of a log file -> take last N, reverse
-        const recent = lines.slice(-MAX_LINES).reverse();
-        logs = recent.map(parseLine);
-
+        logs = data.logs;
         countEl.textContent = `Showing ${logs.length} most recent entries`;
         renderTable();
     } catch (err) {
         logs = [];
         countEl.textContent = "";
         document.getElementById("logs-body").innerHTML =
-            `<tr><td colspan="3" class="logs-empty">
-                Could not load ${LOG_FILE}. Make sure the file is in the project
-                folder and you're viewing this over a local server (not file://).
-            </td></tr>`;
+            `<tr><td colspan="3" class="logs-empty">Could not load trade logs.</td></tr>`;
     }
 }
 
-// ---- Render the table ------------------------------------------
 function renderTable() {
     const body = document.getElementById("logs-body");
 
@@ -88,7 +50,6 @@ function renderTable() {
     updateSortArrows();
 }
 
-// ---- Sorting ---------------------------------------------------
 function setupSorting() {
     document.querySelectorAll("th[data-sort]").forEach(th => {
         th.addEventListener("click", () => {
@@ -116,7 +77,6 @@ function updateSortArrows() {
     });
 }
 
-// ---- Escape HTML so log text can't break the page --------------
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, "&amp;")
@@ -124,7 +84,6 @@ function escapeHtml(str) {
         .replace(/>/g, "&gt;");
 }
 
-// ---- Init ------------------------------------------------------
 document.getElementById("refresh-btn").addEventListener("click", loadLogs);
 setupSorting();
 loadLogs();
