@@ -89,8 +89,9 @@ def run():
                 return
             account = api.get_account()
             for ticker in tickers_cache:
-                if os.path.exists(f"data/cleaned/{ticker}_cleaned.csv"):
-                    df = pd.read_csv(f"data/cleaned/{ticker}_cleaned.csv")
+                cleaned_path = CLEANED_DIR / f"{ticker}_cleaned.csv"
+                if os.path.exists(cleaned_path):
+                    df = pd.read_csv(cleaned_path)
                 else:
                     raw_df = fetch_raw_data(ticker, start_date='2020-01-01', end_date='2023-01-01')
                     if raw_df is None:
