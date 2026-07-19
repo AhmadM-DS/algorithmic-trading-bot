@@ -36,6 +36,7 @@ MAX_TICKERS = 20
 tickers_cache = []
 risk_state = DailyRiskState()
 market_open_today = False
+market_closed_logged = False
 
 def send_daily_status():
     """
@@ -115,8 +116,10 @@ def evaluate_and_trade(strategy, ticker, account, risk_state):
     return account
 
 def run():
+    global market_closed_logged
     try:
         if is_market_open():
+            market_closed_logged = False
             if not tickers_cache:
                 send_critical("No tickers in cache. Cannot run bot. <@375084779256676353>")
                 logger.info("No tickers in cache yet. Skipping run.")
@@ -142,7 +145,9 @@ def run():
             if elapsed > 600:
                 send_routine(f"run() took {elapsed:.1f}s — approaching the 15-minute slot interval.")
         else:
-            logger.warning("Market is closed. Skipping run.")
+            if not market_closed_logged:
+                logger.warning("Market is closed. Skipping run.")
+                market_closed_logged = True
     except tradeapi.rest.APIError:
         send_critical("Bad API keys / Alpaca rejected request... <@375084779256676353>")
     except requests.exceptions.RequestException:
