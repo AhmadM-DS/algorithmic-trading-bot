@@ -29,7 +29,11 @@
     <main class="main">
         <div class="logs-toolbar">
             <span class="logs-count" id="logs-count">Loading…</span>
-            <button class="refresh-btn" id="refresh-btn">Refresh</button>
+            <div class="toolbar-actions">
+                <input type="date" id="date-filter" class="date-filter" aria-label="Filter by date">
+                <button class="today-btn" id="today-btn">Today</button>
+                <button class="refresh-btn" id="refresh-btn">Refresh</button>
+            </div>
         </div>
 
         <div class="table-wrap">
@@ -45,6 +49,12 @@
                     <tr><td colspan="3" class="logs-empty">Loading logs…</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <div class="pagination" id="pagination">
+            <button class="page-btn" id="prev-page" aria-label="Previous page">‹</button>
+            <span class="page-info" id="page-info"></span>
+            <button class="page-btn" id="next-page" aria-label="Next page">›</button>
         </div>
     </main>
 
