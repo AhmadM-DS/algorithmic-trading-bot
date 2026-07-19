@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 # Local Imports
-from db import get_connection
+from db import get_connection, update_heartbeat
 from alpaca_client import api, tradeapi
 from trader import place_market_order, has_position, sync_order_statuses
 from screener import get_tickers
@@ -153,8 +153,17 @@ def run():
     except requests.exceptions.RequestException:
         send_critical("Cannot connect to Alpaca API... <@375084779256676353>")
 
+def write_heartbeat():
+    try:
+        with get_connection() as conn:
+            update_heartbeat(conn)
+    except Exception:
+        logger.exception("Failed to write bot heartbeat")
+
 if __name__ == "__main__":
     send_routine("Bot started. <@375084779256676353>")
+    write_heartbeat()
+    schedule.every(1).minutes.do(write_heartbeat)
     schedule.every().day.at("09:30").do(refresh_screener)
     for slot in market_time_slots():
         schedule.every().day.at(slot).do(run)

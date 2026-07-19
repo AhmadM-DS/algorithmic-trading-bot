@@ -69,3 +69,16 @@ CREATE TABLE Expenses
         FOREIGN KEY (Subscription_ID) REFERENCES Subscriptions(Subscription_ID)
 );
 GO
+CREATE TABLE PaymentMethods
+(
+    Payment_Method_ID INT IDENTITY(1,1) PRIMARY KEY,
+    [Name] NVARCHAR(50) NOT NULL,
+    CONSTRAINT UQ_PaymentMethod_Name UNIQUE ([Name])
+);
+GO
+CREATE TABLE BotStatus
+(
+    Bot_Status_ID INT NOT NULL PRIMARY KEY,
+    Last_Heartbeat DATETIME2 NOT NULL
+);
+GO

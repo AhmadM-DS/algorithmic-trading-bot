@@ -8,15 +8,14 @@
     <link rel="stylesheet" href="css/index.css">
 </head>
 <body>
-    <!-- Sidebar: copy this block into each page, set the .active class -->
     <div class="sidenav">
         <h1 class="logo">Noctis</h1>
         <p class="tagline">Your friendly<br>trading bot</p>
 
         <div class="status-list">
-            <p class="status"><span class="dot idle"></span>Bot Status</p>
-            <p class="status"><span class="dot good"></span>Server Status</p>
-            <p class="status"><span class="dot bad"></span>Web Host Status</p>
+            <p class="status"><span class="dot idle" data-status="bot"></span>Bot Status</p>
+            <p class="status"><span class="dot idle" data-status="server"></span>Server Status</p>
+            <p class="status"><span class="dot idle" data-status="webHost"></span>Web Host Status</p>
         </div>
 
         <nav class="nav-buttons">
@@ -52,8 +51,8 @@
                 <p class="kpi-value" data-kpi="tradesToday">0</p>
             </div>
             <div class="kpi-card">
-                <p class="kpi-label">Today's Profit</p>
-                <p class="kpi-value" data-kpi="todaysProfit">$0.00</p>
+                <p class="kpi-label">Open Positions</p>
+                <p class="kpi-value" data-kpi="openPositions">0</p>
             </div>
             <div class="kpi-card clock-card">
                 <p class="clock-time" id="clock-time">--:--</p>
@@ -101,6 +100,7 @@
         </div>
     </main>
 
+    <script src="js/status.js"></script>
     <script src="js/index.js"></script>
 </body>
 </html>

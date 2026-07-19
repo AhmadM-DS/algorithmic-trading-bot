@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from routers import expenses, logs
+from routers import expenses, logs, overview, dashboard, payment_methods, status
 from pathlib import Path
 
 
@@ -18,6 +18,10 @@ app.add_middleware(
 
 app.include_router(expenses.router)
 app.include_router(logs.router)
+app.include_router(overview.router)
+app.include_router(dashboard.router)
+app.include_router(payment_methods.router)
+app.include_router(status.router)
 
 
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
