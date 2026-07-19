@@ -25,6 +25,7 @@ from strategies.base_strategy import Strategy
 from strategies.macd import MACDStrategy
 from strategies.rsi import RSIStrategy
 from strategies.moving_average import MovingAverageStrategy
+from strategies.momentum import Momentum
 from market_hours import is_market_open, is_weekend, market_time_slots
 from notifications import send_critical, send_routine, send_trades
 from risk import DailyRiskState
@@ -141,7 +142,8 @@ def run():
                     strategies = [
                         MACDStrategy("Macd", df=df, ticker=ticker, initial_capital=10000),
                         MovingAverageStrategy("Moving Average", df=df, ticker=ticker, initial_capital=10000),
-                        RSIStrategy("RSI", df=df, ticker=ticker, initial_capital=10000)
+                        RSIStrategy("RSI", df=df, ticker=ticker, initial_capital=10000),
+                        Momentum("Momentum", df=df, ticker=ticker, initial_capital=10000)
                     ]
                     for strategy in strategies:
                         account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
