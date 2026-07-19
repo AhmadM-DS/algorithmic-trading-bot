@@ -32,6 +32,25 @@ def run_query(conn, sql):
         result.append(dict(zip(columns, row)))
     return result
 
+def run_query_params(conn, sql, params):
+    cursor = conn.cursor()
+    cursor.execute(sql, params)
+    columns = [col[0] for col in cursor.description]
+    rows = cursor.fetchall()
+    result = []
+    for row in rows:
+        result.append(dict(zip(columns, row)))
+    return result
+
+def run_insert(conn, sql, params):
+    """Runs a parameterized INSERT ... OUTPUT INSERTED.<col> statement and commits.
+    Returns the value of the OUTPUT column (e.g. the new row's ID)."""
+    cursor = conn.cursor()
+    cursor.execute(sql, params)
+    row = cursor.fetchone()
+    conn.commit()
+    return row[0] if row else None
+
 if __name__ == "__main__":
     with get_connection() as conn:
         result = run_query(conn, "SELECT TOP 5 * FROM Trades")

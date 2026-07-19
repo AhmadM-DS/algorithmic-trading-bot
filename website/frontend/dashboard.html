@@ -8,15 +8,14 @@
     <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
-    <!-- Sidebar: same block as other pages, "Dashboard" is active -->
     <div class="sidenav">
         <h1 class="logo">Noctis</h1>
         <p class="tagline">Your friendly<br>trading bot</p>
 
         <div class="status-list">
-            <p class="status"><span class="dot good"></span>Bot Status</p>
-            <p class="status"><span class="dot good"></span>Server Status</p>
-            <p class="status"><span class="dot good"></span>Web Host Status</p>
+            <p class="status"><span class="dot idle" data-status="bot"></span>Bot Status</p>
+            <p class="status"><span class="dot idle" data-status="server"></span>Server Status</p>
+            <p class="status"><span class="dot idle" data-status="webHost"></span>Web Host Status</p>
         </div>
 
         <nav class="nav-buttons">
@@ -28,9 +27,6 @@
     </div>
 
     <main class="main">
-        <h2 class="page-title">Dashboard</h2>
-        <p class="page-subtitle">Strategy performance and trend analysis</p>
-
         <!-- Risk metric KPI cards -->
         <div class="risk-row">
             <div class="risk-card">
@@ -107,8 +103,8 @@
         </div>
     </main>
 
-    <!-- Chart.js from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="js/status.js"></script>
     <script src="js/dashboard.js"></script>
 </body>
 </html>

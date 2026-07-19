@@ -87,3 +87,14 @@ def update_order_status(conn, alpaca_order_id, status):
     )
     conn.commit()
     logger.info(f"Updated {cursor.rowcount} rows to {status} status")
+
+def update_heartbeat(conn):
+    """Upserts the single BotStatus row with the current UTC time.
+    Called periodically while the bot's main loop is alive; the website
+    infers a crash from how stale this timestamp gets."""
+    now = datetime.utcnow()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE BotStatus SET Last_Heartbeat = ? WHERE Bot_Status_ID = 1", (now,))
+    if cursor.rowcount == 0:
+        cursor.execute("INSERT INTO BotStatus (Bot_Status_ID, Last_Heartbeat) VALUES (1, ?)", (now,))
+    conn.commit()

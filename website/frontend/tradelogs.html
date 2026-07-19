@@ -8,15 +8,14 @@
     <link rel="stylesheet" href="css/tradelogs.css">
 </head>
 <body>
-    <!-- Sidebar: same block, "Trade Logs" is active -->
     <div class="sidenav">
         <h1 class="logo">Noctis</h1>
         <p class="tagline">Your friendly<br>trading bot</p>
 
         <div class="status-list">
-            <p class="status"><span class="dot good"></span>Bot Status</p>
-            <p class="status"><span class="dot good"></span>Server Status</p>
-            <p class="status"><span class="dot good"></span>Web Host Status</p>
+            <p class="status"><span class="dot idle" data-status="bot"></span>Bot Status</p>
+            <p class="status"><span class="dot idle" data-status="server"></span>Server Status</p>
+            <p class="status"><span class="dot idle" data-status="webHost"></span>Web Host Status</p>
         </div>
 
         <nav class="nav-buttons">
@@ -28,9 +27,6 @@
     </div>
 
     <main class="main">
-        <h2 class="page-title">Trade Logs</h2>
-        <p class="page-subtitle">Most recent 50 entries from tradelogs.txt</p>
-
         <div class="logs-toolbar">
             <span class="logs-count" id="logs-count">Loading…</span>
             <button class="refresh-btn" id="refresh-btn">Refresh</button>
@@ -52,6 +48,7 @@
         </div>
     </main>
 
+    <script src="js/status.js"></script>
     <script src="js/tradelogs.js"></script>
 </body>
 </html>

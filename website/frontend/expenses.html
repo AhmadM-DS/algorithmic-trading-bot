@@ -8,15 +8,14 @@
     <link rel="stylesheet" href="css/expenses.css">
 </head>
 <body>
-    <!-- Sidebar: same block, "Expenses" is active -->
     <div class="sidenav">
         <h1 class="logo">Noctis</h1>
         <p class="tagline">Your friendly<br>trading bot</p>
 
         <div class="status-list">
-            <p class="status"><span class="dot good"></span>Bot Status</p>
-            <p class="status"><span class="dot good"></span>Server Status</p>
-            <p class="status"><span class="dot good"></span>Web Host Status</p>
+            <p class="status"><span class="dot idle" data-status="bot"></span>Bot Status</p>
+            <p class="status"><span class="dot idle" data-status="server"></span>Server Status</p>
+            <p class="status"><span class="dot idle" data-status="webHost"></span>Web Host Status</p>
         </div>
 
         <nav class="nav-buttons">
@@ -28,9 +27,6 @@
     </div>
 
     <main class="main">
-        <h2 class="page-title">Expenses</h2>
-        <p class="page-subtitle">Subscriptions and one-off costs for running the bot</p>
-
         <!-- Summary cards -->
         <div class="summary-row">
             <div class="summary-card">
@@ -51,7 +47,9 @@
         <div class="section-heading">
             <h3>Active Subscriptions</h3>
             <span class="sub-total" id="subs-count"></span>
+            <button class="add-btn" id="subs-add-toggle" type="button">+ Add Subscription</button>
         </div>
+
         <div class="table-wrap">
             <table class="exp-table">
                 <thead>
@@ -77,7 +75,9 @@
         <div class="section-heading">
             <h3>Expenses</h3>
             <span class="sub-total" id="exp-count"></span>
+            <button class="add-btn" id="exp-add-toggle" type="button">+ Add Expense</button>
         </div>
+
         <div class="table-wrap">
             <table class="exp-table">
                 <thead>
@@ -98,6 +98,114 @@
         </div>
     </main>
 
+    <!-- Add Subscription modal -->
+    <dialog class="modal" id="subs-modal">
+        <form class="modal-form" id="subs-form">
+            <div class="modal-header">
+                <h3>Add Subscription</h3>
+                <button type="button" class="modal-close" id="subs-modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="form-grid">
+                <label>Service Name
+                    <input type="text" name="Service_Name" maxlength="50" required>
+                </label>
+                <label>Provider
+                    <input type="text" name="Provider" maxlength="50" required>
+                </label>
+                <label class="span-2">Purpose
+                    <input type="text" name="Purpose" maxlength="250">
+                </label>
+                <label>Cost
+                    <input type="number" name="Cost" step="0.01" min="0" required>
+                </label>
+                <label>Billing Cycle
+                    <select name="Billing_Cycle" required>
+                        <option value="Monthly">Monthly</option>
+                        <option value="Yearly">Yearly</option>
+                        <option value="Quarterly">Quarterly</option>
+                        <option value="Weekly">Weekly</option>
+                    </select>
+                </label>
+                <div class="span-2 payment-method-field">
+                    <label>Payment Method
+                        <div class="payment-method-row">
+                            <select name="Payment_Method" id="subs-payment-select" required></select>
+                            <button type="button" class="add-payment-btn" data-target="subs">+</button>
+                        </div>
+                    </label>
+                    <div class="add-payment-inline" id="subs-add-payment-inline" hidden>
+                        <input type="text" id="subs-new-payment-name" maxlength="50" placeholder="New payment method name">
+                        <button type="button" class="save-btn small" id="subs-new-payment-save">Add</button>
+                        <button type="button" class="cancel-btn small" id="subs-new-payment-cancel">Cancel</button>
+                    </div>
+                </div>
+                <label>Start Date
+                    <input type="date" name="Start_Date" required>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="Is_Active" checked>
+                    Active
+                </label>
+            </div>
+            <div class="form-actions">
+                <span class="form-error" id="subs-form-error"></span>
+                <button type="button" class="cancel-btn" id="subs-cancel-btn">Cancel</button>
+                <button type="submit" class="save-btn">Save Subscription</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Add Expense modal -->
+    <dialog class="modal" id="exp-modal">
+        <form class="modal-form" id="exp-form">
+            <div class="modal-header">
+                <h3>Add Expense</h3>
+                <button type="button" class="modal-close" id="exp-modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="form-grid">
+                <label>Expense Name
+                    <input type="text" name="Expense_Name" maxlength="50" required>
+                </label>
+                <label>Provider
+                    <input type="text" name="Provider" maxlength="50" required>
+                </label>
+                <label class="span-2">Purpose
+                    <input type="text" name="Purpose" maxlength="250">
+                </label>
+                <label>Cost
+                    <input type="number" name="Cost" step="0.01" min="0" required>
+                </label>
+                <label>Date
+                    <input type="date" name="Date" required>
+                </label>
+                <div class="span-2 payment-method-field">
+                    <label>Payment Method
+                        <div class="payment-method-row">
+                            <select name="Payment_Method" id="exp-payment-select" required></select>
+                            <button type="button" class="add-payment-btn" data-target="exp">+</button>
+                        </div>
+                    </label>
+                    <div class="add-payment-inline" id="exp-add-payment-inline" hidden>
+                        <input type="text" id="exp-new-payment-name" maxlength="50" placeholder="New payment method name">
+                        <button type="button" class="save-btn small" id="exp-new-payment-save">Add</button>
+                        <button type="button" class="cancel-btn small" id="exp-new-payment-cancel">Cancel</button>
+                    </div>
+                </div>
+                <label class="span-2">Linked Subscription
+                    <select name="Subscription_ID" id="exp-subscription-select">
+                        <option value="">None</option>
+                    </select>
+                </label>
+            </div>
+            <div class="form-actions">
+                <span class="form-error" id="exp-form-error"></span>
+                <button type="button" class="cancel-btn" id="exp-cancel-btn">Cancel</button>
+                <button type="submit" class="save-btn">Save Expense</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="js/status.js"></script>
     <script src="js/expenses.js"></script>
 </body>
 </html>
