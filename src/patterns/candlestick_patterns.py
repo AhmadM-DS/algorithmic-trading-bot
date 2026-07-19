@@ -4,6 +4,8 @@ Detects the following price-action patterns:
     -Fair Value Gap
     -Bull Flag Breakout
     -Flat Top Breakout
+    -Liquidity Sweep
+    -Market Structure Shift (CHoCH)
     ADD TO LIST AS WE DETECT MORE
 """
 
@@ -207,3 +209,112 @@ class FlatTopBreakout(Pattern):
         window = recent.iloc[:-1]
         breakout = recent.iloc[-1]
         return self._evaluate(window, breakout)
+
+
+class LiquiditySweep(Pattern):
+    """
+    A liquidity sweep is a single candle that pushes through a recent swing
+    low (bullish) or swing high (bearish) - clearing out the stop orders
+    resting there - and is then immediately rejected. The sweep is only
+    valid if the following candle fails to exceed or close beyond the
+    sweep candle's extreme.
+    """
+    def __init__(self, swing_lookback=10):
+        """
+        Parameters:
+            swing_lookback (int): Candles used to establish the prior swing
+                high/low that liquidity is expected to rest beyond.
+        """
+        self.swing_lookback = swing_lookback
+
+    def _evaluate(self, window, sweep, confirmation):
+        swing_low = window["Low"].min()
+        swing_high = window["High"].max()
+
+        swept_low = sweep["Low"] < swing_low
+        swept_high = sweep["High"] > swing_high
+
+        if swept_low and not swept_high:
+            direction = "bullish"
+            valid = confirmation["Low"] >= sweep["Low"] and confirmation["Close"] > sweep["Close"]
+            swept_level = swing_low
+        elif swept_high and not swept_low:
+            direction = "bearish"
+            valid = confirmation["High"] <= sweep["High"] and confirmation["Close"] < sweep["Close"]
+            swept_level = swing_high
+        else:
+            return None
+
+        if not valid:
+            return None
+
+        return {
+            "direction": direction,
+            "swept_level": swept_level,
+            "sweep_low": sweep["Low"],
+            "sweep_high": sweep["High"],
+        }
+
+    def calculate(self, df):
+        """Batch mode: For backtesting on full historical data"""
+        matches = [None] * len(df)
+        for i in range(self.swing_lookback, len(df) - 1):
+            window = df.iloc[i - self.swing_lookback : i]
+            sweep = df.iloc[i]
+            confirmation = df.iloc[i + 1]
+            matches[i] = self._evaluate(window, sweep, confirmation)
+        return pd.Series(matches, index=df.index, name="liquidity_sweep")
+
+    def update(self, candles):
+        """Streaming mode: For paper & live trading, needs the swing window plus sweep and confirmation candles"""
+        if len(candles) < self.swing_lookback + 2:
+            return None
+        recent = pd.DataFrame(list(candles[-(self.swing_lookback + 2):]))
+        window = recent.iloc[: self.swing_lookback]
+        sweep = recent.iloc[-2]
+        confirmation = recent.iloc[-1]
+        return self._evaluate(window, sweep, confirmation)
+
+
+class MarketStructureShift(Pattern):
+    """
+    A Change of Character (CHoCH) marks the point where an established
+    trend breaks: in an uptrend, a close below the most recent swing low;
+    in a downtrend, a close above the most recent swing high. ICT traders
+    treat this level as confirmation that the trend has shifted.
+    """
+    def __init__(self, swing_lookback=10):
+        """
+        Parameters:
+            swing_lookback (int): Candles used to establish the swing
+                high/low that must be broken to confirm the shift.
+        """
+        self.swing_lookback = swing_lookback
+
+    def _evaluate(self, window, candle):
+        swing_low = window["Low"].min()
+        swing_high = window["High"].max()
+
+        if candle["Close"] < swing_low:
+            return {"direction": "bearish", "shift_level": swing_low}
+        elif candle["Close"] > swing_high:
+            return {"direction": "bullish", "shift_level": swing_high}
+        return None
+
+    def calculate(self, df):
+        """Batch mode: For backtesting on full historical data"""
+        matches = [None] * len(df)
+        for i in range(self.swing_lookback, len(df)):
+            window = df.iloc[i - self.swing_lookback : i]
+            candle = df.iloc[i]
+            matches[i] = self._evaluate(window, candle)
+        return pd.Series(matches, index=df.index, name="market_structure_shift")
+
+    def update(self, candles):
+        """Streaming mode: For paper & live trading, needs the swing window plus the latest candle"""
+        if len(candles) < self.swing_lookback + 1:
+            return None
+        recent = pd.DataFrame(list(candles[-(self.swing_lookback + 1):]))
+        window = recent.iloc[:-1]
+        candle = recent.iloc[-1]
+        return self._evaluate(window, candle)
