@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 # Local Imports
-from db import get_connection, update_heartbeat
+from db import get_connection, update_heartbeat, insert_trade
 from alpaca_client import api, tradeapi
 from trader import place_market_order, has_position, sync_order_statuses, size_position
 from screener import get_tickers
@@ -74,7 +74,7 @@ def refresh_screener():
     logger.info(f"Screener refreshed. {len(tickers_cache)} tickers found.")
     send_routine(f"Screener refreshed. Adding the following tickers: {tickers_cache}")
 
-def evaluate_and_trade(strategy, ticker, account, risk_state):
+def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
     """
     Evaluate one strategy's signal for one ticker and place an order if
     warranted. Returns the (possibly refreshed) account object.
@@ -93,9 +93,11 @@ def evaluate_and_trade(strategy, ticker, account, risk_state):
                 send_trades(f"Order not executed. Attempted to purchase 0 shares of {ticker}.")
                 logger.warning("Order not executed: Quantity is 0.")
                 return account
-            result = place_market_order(ticker, quantity, side="buy")
+            result = place_market_order(conn, ticker, quantity, side="buy", price=current_price)
             if "Order Placed" in result:
                 risk_state.record_buy(ticker, strategy.name, current_price, quantity)
+                insert_trade(conn, strategy.name, ticker, side="buy", quantity=quantity,
+                             price=current_price, trade_type="Live", order_id=result["Order_ID"])
                 account = api.get_account()  # refresh buying power after order
         elif signal == -1:
             if risk_state.already_executed(ticker, strategy.name, "sell"):
@@ -106,9 +108,13 @@ def evaluate_and_trade(strategy, ticker, account, risk_state):
                 if entry_qty is None:
                     logger.warning(f"No recorded entry for {strategy.name} on {ticker}; skipping sell (unknown quantity).")
                     return account
-                result = place_market_order(ticker, entry_qty, side="sell")
+                entry_price = risk_state.get_entry_price(strategy.name, ticker)
+                result = place_market_order(conn, ticker, entry_qty, side="sell", price=current_price)
                 if "Order Placed" in result:
+                    profit = (current_price - entry_price) * entry_qty if entry_price is not None else None
                     risk_state.record_sell(ticker, strategy.name, current_price, entry_qty)
+                    insert_trade(conn, strategy.name, ticker, side="sell", quantity=entry_qty,
+                                 price=current_price, trade_type="Live", profit=profit, order_id=result["Order_ID"])
                     account = api.get_account()  # refresh buying power after order
     except AttributeError:
         send_critical(f"Could not get price of {ticker}, skipping. <@375084779256676353>")
@@ -126,19 +132,19 @@ def run():
                 return
             run_started = time.monotonic()
             account = api.get_account()
-            for ticker in tickers_cache:
-                df = load_ticker_data(ticker)
-                if df is None:
-                    continue
-
-                strategies = [
-                    MACDStrategy("Macd", df=df, ticker=ticker, initial_capital=10000),
-                    MovingAverageStrategy("Moving Average", df=df, ticker=ticker, initial_capital=10000),
-                    RSIStrategy("RSI", df=df, ticker=ticker, initial_capital=10000)
-                ]
-                for strategy in strategies:
-                    account = evaluate_and_trade(strategy, ticker, account, risk_state)
             with get_connection() as conn:
+                for ticker in tickers_cache:
+                    df = load_ticker_data(ticker)
+                    if df is None:
+                        continue
+
+                    strategies = [
+                        MACDStrategy("Macd", df=df, ticker=ticker, initial_capital=10000),
+                        MovingAverageStrategy("Moving Average", df=df, ticker=ticker, initial_capital=10000),
+                        RSIStrategy("RSI", df=df, ticker=ticker, initial_capital=10000)
+                    ]
+                    for strategy in strategies:
+                        account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
                 sync_order_statuses(conn)
             elapsed = time.monotonic() - run_started
             logger.info(f"run() completed in {elapsed:.1f}s for {len(tickers_cache)} tickers.")

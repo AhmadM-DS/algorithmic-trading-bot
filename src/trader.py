@@ -5,7 +5,7 @@ Placing an order with Alpaca API.
 
 #Local Import
 from alpaca_client import api, tradeapi
-from db import update_order_status
+from db import update_order_status, insert_order
 from notifications import send_trades
 from logger import get_logger
 logger = get_logger(__name__)
@@ -38,14 +38,16 @@ def size_position(account, current_price, risk_fraction):
     """
     return int(float(account.buying_power) * risk_fraction / current_price)
 
-def place_market_order(ticker, quantity, side):
+def place_market_order(conn, ticker, quantity, side, price):
     """
     Place a buy or sell order using custom arguments.
 
     Parameters:
+        conn: Open database connection, used to log the order.
         ticker: The stock symbol to buy.
         quantity: The amount of shares to buy.
         side: Define a buy or sell order.
+        price: Latest trade price at order time, logged alongside the order.
     """
     try:
         order = api.submit_order(
@@ -57,7 +59,8 @@ def place_market_order(ticker, quantity, side):
         )
         logger.info(f"Order to {side} {quantity} shares of ${ticker} has been placed.")
         send_trades(f"Order to {side} {quantity} shares of ${ticker} has been placed.")
-        return {"Order Placed": order}
+        order_id = insert_order(conn, order.id, ticker, side, quantity, price, order.status)
+        return {"Order Placed": order, "Order_ID": order_id}
     except tradeapi.rest.APIError as e:
         reason = str(e)
         logger.error(f"Unable to {side} {quantity} shares of ${ticker}. Reason: {reason}")

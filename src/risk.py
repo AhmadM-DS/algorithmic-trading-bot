@@ -74,6 +74,14 @@ class DailyRiskState:
         entry = self.strategy_entry_prices.get((strategy_name, ticker))
         return entry[1] if entry else None
 
+    def get_entry_price(self, strategy_name, ticker):
+        """
+        Return the recorded entry price for (strategy_name, ticker), or
+        None if there's no recorded entry.
+        """
+        entry = self.strategy_entry_prices.get((strategy_name, ticker))
+        return entry[0] if entry else None
+
     def is_halted(self, strategy_name):
         """
         Called before evaluating a strategy's signal for a ticker.
