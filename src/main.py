@@ -4,15 +4,11 @@ Pipline that runs the bot on schedule.
 """
 
 # Standard Library
-import os
 import time
 from pathlib import Path
-BASE_DIR = Path(__file__).resolve().parent.parent
-CLEANED_DIR = BASE_DIR / "data" / "cleaned"
 import requests
 
 # Third Party Libraries
-import pandas as pd
 import schedule
 from dotenv import load_dotenv
 
@@ -22,63 +18,101 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 # Local Imports
 from db import get_connection
 from alpaca_client import api, tradeapi
-from trader import place_market_order, has_position, sync_order_statuses
+from trader import place_market_order, has_position, sync_order_statuses, size_position
 from screener import get_tickers
-from cleaner import fetch_raw_data, clean_data
+from cleaner import load_ticker_data
 from strategies.base_strategy import Strategy
 from strategies.macd import MACDStrategy
 from strategies.rsi import RSIStrategy
 from strategies.moving_average import MovingAverageStrategy
-from market_hours import is_market_open, market_time_slots
+from market_hours import is_market_open, is_weekend, market_time_slots
 from notifications import send_critical, send_routine, send_trades
+from risk import DailyRiskState
 from logger import get_logger
 logger = get_logger(__name__)
 
 MAX_TICKERS = 20
-PROFIT_TARGET = 0.10    # halt strategy once daily ROI >= +10%
-LOSS_LIMIT    = -0.05   # halt strategy once daily ROI <= -5%
 
 tickers_cache = []
+risk_state = DailyRiskState()
+market_open_today = False
 
-# Per-day state — all reset at 09:30 screener refresh
-signals_executed_today = set()   # (ticker, strategy_name, side) — prevents duplicate orders
-strategy_cost_basis    = {}      # strategy_name -> total capital deployed today ($)
-strategy_realized_pnl  = {}      # strategy_name -> total realized P&L today ($)
-strategy_entry_prices  = {}      # (strategy_name, ticker) -> (entry_price, qty)
-halted_strategies      = set()   # strategies shut off for the rest of the day
+def send_daily_status():
+    """
+    Once-a-day health check to make sure bot is running properly.
+    """
+    global market_open_today
+    market_open_today = is_market_open()
+    if market_open_today:
+        send_routine("Market is open. Bot is running today.")
+        logger.info("Market is open. Bot is running today.")
+    elif is_weekend():
+        send_routine("Market is closed (weekend). Bot didn't run today.")
+        logger.info("Market is closed (weekend). Bot didn't run today.")
+    else:
+        send_routine("Market is closed today. Bot stopped running.")
+        logger.info("Market is closed today. Bot stopped running.")
 
-def reset_daily_state():
-    signals_executed_today.clear()
-    strategy_cost_basis.clear()
-    strategy_realized_pnl.clear()
-    strategy_entry_prices.clear()
-    halted_strategies.clear()
-
-def is_strategy_halted(name):
-    if name in halted_strategies:
-        return True
-    cost = strategy_cost_basis.get(name, 0)
-    if cost == 0:
-        return False
-    roi = strategy_realized_pnl.get(name, 0) / cost
-    if roi >= PROFIT_TARGET:
-        halted_strategies.add(name)
-        logger.info(f"Strategy {name} halted: profit target reached ({roi:.1%} ROI).")
-        send_routine(f"Strategy {name} halted for today: profit target reached ({roi:.1%} ROI).")
-        return True
-    if roi <= LOSS_LIMIT:
-        halted_strategies.add(name)
-        logger.info(f"Strategy {name} halted: loss limit reached ({roi:.1%} ROI).")
-        send_routine(f"Strategy {name} halted for today: loss limit reached ({roi:.1%} ROI).")
-        return True
-    return False
+def send_closing_status():
+    """
+    End-of-day confirmation that the bot ran through today's session and
+    stopped when the market closed.
+    """
+    if not market_open_today:
+        return
+    send_routine("Market has closed for the day. Bot has stopped running.")
+    logger.info("Market has closed for the day. Bot has stopped running.")
 
 def refresh_screener():
     global tickers_cache
-    reset_daily_state()
+    if not is_market_open():
+        logger.info("Market is closed. Skipping screener refresh.")
+        return
+    risk_state.reset_daily_state()
     tickers_cache = get_tickers(Strategy.filters)[:MAX_TICKERS]
     logger.info(f"Screener refreshed. {len(tickers_cache)} tickers found.")
     send_routine(f"Screener refreshed. Adding the following tickers: {tickers_cache}")
+
+def evaluate_and_trade(strategy, ticker, account, risk_state):
+    """
+    Evaluate one strategy's signal for one ticker and place an order if
+    warranted. Returns the (possibly refreshed) account object.
+    """
+    if risk_state.is_halted(strategy.name):
+        return account
+    signal = strategy.get_latest_signal()
+    try:
+        current_price = api.get_latest_trade(ticker).price
+        if signal == 1:
+            if risk_state.already_executed(ticker, strategy.name, "buy"):
+                logger.info(f"Duplicate buy signal skipped: {strategy.name} on {ticker}.")
+                return account
+            quantity = size_position(account, current_price, strategy.risk_fraction)
+            if quantity == 0:
+                send_trades(f"Order not executed. Attempted to purchase 0 shares of {ticker}.")
+                logger.warning("Order not executed: Quantity is 0.")
+                return account
+            result = place_market_order(ticker, quantity, side="buy")
+            if "Order Placed" in result:
+                risk_state.record_buy(ticker, strategy.name, current_price, quantity)
+                account = api.get_account()  # refresh buying power after order
+        elif signal == -1:
+            if risk_state.already_executed(ticker, strategy.name, "sell"):
+                logger.info(f"Duplicate sell signal skipped: {strategy.name} on {ticker}.")
+                return account
+            if has_position(ticker):
+                entry_qty = risk_state.get_entry_quantity(strategy.name, ticker)
+                if entry_qty is None:
+                    logger.warning(f"No recorded entry for {strategy.name} on {ticker}; skipping sell (unknown quantity).")
+                    return account
+                result = place_market_order(ticker, entry_qty, side="sell")
+                if "Order Placed" in result:
+                    risk_state.record_sell(ticker, strategy.name, current_price, entry_qty)
+                    account = api.get_account()  # refresh buying power after order
+    except AttributeError:
+        send_critical(f"Could not get price of {ticker}, skipping. <@375084779256676353>")
+        logger.warning(f"Could not get price of {ticker}, skipping.")
+    return account
 
 def run():
     try:
@@ -87,16 +121,12 @@ def run():
                 send_critical("No tickers in cache. Cannot run bot. <@375084779256676353>")
                 logger.info("No tickers in cache yet. Skipping run.")
                 return
+            run_started = time.monotonic()
             account = api.get_account()
             for ticker in tickers_cache:
-                cleaned_path = CLEANED_DIR / f"{ticker}_cleaned.csv"
-                if os.path.exists(cleaned_path):
-                    df = pd.read_csv(cleaned_path)
-                else:
-                    raw_df = fetch_raw_data(ticker, start_date='2020-01-01', end_date='2023-01-01')
-                    if raw_df is None:
-                        continue
-                    df = clean_data(ticker)
+                df = load_ticker_data(ticker)
+                if df is None:
+                    continue
 
                 strategies = [
                     MACDStrategy("Macd", df=df, ticker=ticker, initial_capital=10000),
@@ -104,48 +134,13 @@ def run():
                     RSIStrategy("RSI", df=df, ticker=ticker, initial_capital=10000)
                 ]
                 for strategy in strategies:
-                    if is_strategy_halted(strategy.name):
-                        continue
-                    signal = strategy.get_latest_signal()
-                    try:
-                        current_price = api.get_latest_trade(ticker).price
-                        quantity = int(float(account.buying_power) * 0.25 / current_price)
-                        if quantity == 0:
-                            send_trades(f"Order not executed. Attempted to purchase 0 shares of {ticker}.")
-                            logger.warning("Order not executed: Quantity is 0.")
-                            continue
-                        if signal == 1:
-                            buy_key = (ticker, strategy.name, "buy")
-                            if buy_key in signals_executed_today:
-                                logger.info(f"Duplicate buy signal skipped: {strategy.name} on {ticker}.")
-                                continue
-                            result = place_market_order(ticker, quantity, side="buy")
-                            if "Order Placed" in result:
-                                signals_executed_today.add(buy_key)
-                                strategy_cost_basis[strategy.name] = strategy_cost_basis.get(strategy.name, 0) + current_price * quantity
-                                strategy_entry_prices[(strategy.name, ticker)] = (current_price, quantity)
-                                account = api.get_account()  # refresh buying power after order
-                        elif signal == -1:
-                            sell_key = (ticker, strategy.name, "sell")
-                            if sell_key in signals_executed_today:
-                                logger.info(f"Duplicate sell signal skipped: {strategy.name} on {ticker}.")
-                                continue
-                            if has_position(ticker):
-                                result = place_market_order(ticker, quantity, side="sell")
-                                if "Order Placed" in result:
-                                    signals_executed_today.add(sell_key)
-                                    entry = strategy_entry_prices.pop((strategy.name, ticker), None)
-                                    if entry:
-                                        entry_price, entry_qty = entry
-                                        pnl = (current_price - entry_price) * entry_qty
-                                        strategy_realized_pnl[strategy.name] = strategy_realized_pnl.get(strategy.name, 0) + pnl
-                                    account = api.get_account()  # refresh buying power after order
-                    except AttributeError:
-                        send_critical(f"Could not get price of {ticker}, skipping. <@375084779256676353>")
-                        logger.warning(f"Could not get price of {ticker}, skipping.")
-                        continue
+                    account = evaluate_and_trade(strategy, ticker, account, risk_state)
             with get_connection() as conn:
                 sync_order_statuses(conn)
+            elapsed = time.monotonic() - run_started
+            logger.info(f"run() completed in {elapsed:.1f}s for {len(tickers_cache)} tickers.")
+            if elapsed > 600:
+                send_routine(f"run() took {elapsed:.1f}s — approaching the 15-minute slot interval.")
         else:
             logger.warning("Market is closed. Skipping run.")
     except tradeapi.rest.APIError:
@@ -155,9 +150,11 @@ def run():
 
 if __name__ == "__main__":
     send_routine("Bot started. <@375084779256676353>")
+    schedule.every().day.at("09:30").do(send_daily_status)
     schedule.every().day.at("09:30").do(refresh_screener)
     for slot in market_time_slots():
         schedule.every().day.at(slot).do(run)
+    schedule.every().day.at("16:01").do(send_closing_status)
     try:
         while True:
             schedule.run_pending()

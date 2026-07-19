@@ -9,3 +9,6 @@ DEFAULT_FILTERS = [
     {"left": "relative_volume_10d_calc", "operation": "greater", "right": 5},
     {"left": "float_shares_outstanding_current", "operation": "in_range", "right": [1000000, 10000000]}
 ]
+DEFAULT_PROFIT_TARGET = 0.10
+DEFAULT_LOSS_LIMIT = -0.05
+DEFAULT_LOOKBACK_DAYS = 300

@@ -23,10 +23,11 @@ BASE_URL = os.getenv("ALPACA_BASE_URL")
 
 if not all ([API_KEY, SECRET_KEY, BASE_URL]):
     logger.warning("One or more environment variables are missing.")
+    raise RuntimeError("Missing Alpaca API credentials in environment variables.")
 
 #Connect to API
 try:
     api = tradeapi.REST(API_KEY, SECRET_KEY, BASE_URL)
-    logger.info("Successfully connected to Alpaca API.")
+    logger.info("Successfully connected to Alpaca API.") 
 except requests.exceptions.RequestException:
     logger.error("Unable to connect to Alpaca API.")
