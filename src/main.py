@@ -16,9 +16,9 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 # Local Imports
-from db import get_connection, update_heartbeat, insert_trade
+from db import get_connection, update_heartbeat, insert_trade, get_inactive_tickers, mark_ticker_inactive
 from alpaca_client import api, tradeapi
-from trader import place_market_order, has_position, sync_order_statuses, size_position
+from trader import place_market_order, has_position, sync_order_statuses, size_position, reconcile_bracket_exits
 from screener import get_tickers
 from cleaner import load_ticker_data
 from strategies.base_strategy import Strategy
@@ -36,9 +36,19 @@ logger = get_logger(__name__)
 MAX_TICKERS = 20
 
 tickers_cache = []
+inactive_tickers = set()
 risk_state = DailyRiskState()
 market_open_today = False
 market_closed_logged = False
+
+def load_inactive_tickers():
+    global inactive_tickers
+    try:
+        with get_connection() as conn:
+            inactive_tickers = get_inactive_tickers(conn)
+        logger.info(f"Loaded {len(inactive_tickers)} inactive tickers from the database.")
+    except Exception:
+        logger.exception("Failed to load inactive tickers from the database.")
 
 def send_daily_status():
     """
@@ -72,7 +82,8 @@ def refresh_screener():
         logger.info("Market is closed. Skipping screener refresh.")
         return
     risk_state.reset_daily_state()
-    tickers_cache = get_tickers(Strategy.filters)[:MAX_TICKERS]
+    screened = [t for t in get_tickers(Strategy.filters) if t not in inactive_tickers]
+    tickers_cache = screened[:MAX_TICKERS]
     logger.info(f"Screener refreshed. {len(tickers_cache)} tickers found.")
     send_routine(f"Screener refreshed. Adding the following tickers: {tickers_cache}")
 
@@ -101,6 +112,9 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
                 insert_trade(conn, strategy.name, ticker, side="buy", quantity=quantity,
                              price=current_price, trade_type="Live", order_id=result["Order_ID"])
                 account = api.get_account()  # refresh buying power after order
+            elif result.get("Inactive"):
+                inactive_tickers.add(ticker)
+                mark_ticker_inactive(conn, ticker, result["Order Failed"])
         elif signal == -1:
             if risk_state.already_executed(ticker, strategy.name, "sell"):
                 logger.info(f"Duplicate sell signal skipped: {strategy.name} on {ticker}.")
@@ -111,13 +125,16 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
                     logger.warning(f"No recorded entry for {strategy.name} on {ticker}; skipping sell (unknown quantity).")
                     return account
                 entry_price = risk_state.get_entry_price(strategy.name, ticker)
-                result = place_market_order(conn, ticker, entry_qty, side="sell", price=current_price)
+                result = place_market_order(conn, ticker, entry_qty, side="sell", price=current_price, entry_price=entry_price)
                 if "Order Placed" in result:
                     profit = (current_price - entry_price) * entry_qty if entry_price is not None else None
                     risk_state.record_sell(ticker, strategy.name, current_price, entry_qty)
                     insert_trade(conn, strategy.name, ticker, side="sell", quantity=entry_qty,
                                  price=current_price, trade_type="Live", profit=profit, order_id=result["Order_ID"])
                     account = api.get_account()  # refresh buying power after order
+                elif result.get("Inactive"):
+                    inactive_tickers.add(ticker)
+                    mark_ticker_inactive(conn, ticker, result["Order Failed"])
     except AttributeError:
         send_critical(f"Could not get price of {ticker}, skipping. <@375084779256676353>")
         logger.warning(f"Could not get price of {ticker}, skipping.")
@@ -135,7 +152,10 @@ def run():
             run_started = time.monotonic()
             account = api.get_account()
             with get_connection() as conn:
+                reconcile_bracket_exits(conn, risk_state)
                 for ticker in tickers_cache:
+                    if ticker in inactive_tickers:
+                        continue
                     df = load_ticker_data(ticker)
                     if df is None:
                         continue
@@ -158,10 +178,12 @@ def run():
             if not market_closed_logged:
                 logger.warning("Market is closed. Skipping run.")
                 market_closed_logged = True
-    except tradeapi.rest.APIError:
-        send_critical("Bad API keys / Alpaca rejected request... <@375084779256676353>")
-    except requests.exceptions.RequestException:
-        send_critical("Cannot connect to Alpaca API... <@375084779256676353>")
+    except tradeapi.rest.APIError as e:
+        logger.exception("Alpaca API rejected a request in run().")
+        send_critical(f"Alpaca API error in run(): {e}. <@375084779256676353>")
+    except requests.exceptions.RequestException as e:
+        logger.exception("Cannot connect to Alpaca API in run().")
+        send_critical(f"Cannot connect to Alpaca API in run(): {e}. <@375084779256676353>")
 
 def write_heartbeat():
     try:
@@ -172,6 +194,7 @@ def write_heartbeat():
 
 if __name__ == "__main__":
     send_routine("Bot started. <@375084779256676353>")
+    load_inactive_tickers()
     write_heartbeat()
     schedule.every(1).minutes.do(write_heartbeat)
     schedule.every().day.at("09:30").do(send_daily_status)

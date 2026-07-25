@@ -82,3 +82,11 @@ CREATE TABLE BotStatus
     Last_Heartbeat DATETIME2 NOT NULL
 );
 GO
+CREATE TABLE InactiveTickers
+(
+    Ticker NVARCHAR(5) NOT NULL PRIMARY KEY,
+    Reason NVARCHAR(250),
+    First_Flagged DATETIME2 NOT NULL,
+    Last_Flagged DATETIME2 NOT NULL
+);
+GO

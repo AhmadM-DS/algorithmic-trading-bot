@@ -88,6 +88,29 @@ def update_order_status(conn, alpaca_order_id, status):
     conn.commit()
     logger.info(f"Updated {cursor.rowcount} rows to {status} status")
 
+def get_inactive_tickers(conn):
+    """Returns the set of tickers previously flagged as not active/tradable."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT Ticker FROM InactiveTickers")
+    return {row[0] for row in cursor.fetchall()}
+
+def mark_ticker_inactive(conn, ticker, reason, date=None):
+    """Upserts a ticker into InactiveTickers so it stops being screened/traded."""
+    if date is None:
+        date = datetime.now()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE InactiveTickers SET Reason = ?, Last_Flagged = ? WHERE Ticker = ?",
+        (reason, date, ticker)
+    )
+    if cursor.rowcount == 0:
+        cursor.execute(
+            "INSERT INTO InactiveTickers (Ticker, Reason, First_Flagged, Last_Flagged) VALUES (?, ?, ?, ?)",
+            (ticker, reason, date, date)
+        )
+    conn.commit()
+    logger.info(f"Marked {ticker} as inactive. Reason: {reason}")
+
 def update_heartbeat(conn):
     """Upserts the single BotStatus row with the current UTC time.
     Called periodically while the bot's main loop is alive; the website
