@@ -114,3 +114,16 @@ uvicorn main:app --reload
 This is an active, personal project — see
 [docs/feature_ideas.md](docs/feature_ideas.md) for planned work (regime
 filters, backtest/live sizing parity, exception auditing, and more).
+
+## Disclaimer
+
+This software is for educational and research purposes only and does not
+constitute financial advice. It trades exclusively against Alpaca's paper
+trading endpoint by default — enabling live trading is done at your own
+risk. The author assumes no liability for financial losses incurred through
+use of this software. See the [LICENSE](LICENSE) for the full warranty
+disclaimer.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).
