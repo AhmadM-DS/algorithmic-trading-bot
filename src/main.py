@@ -5,6 +5,7 @@ Pipline that runs the bot on schedule.
 
 # Standard Library
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 import requests
 
@@ -40,6 +41,31 @@ inactive_tickers = set()
 risk_state = DailyRiskState()
 market_open_today = False
 market_closed_logged = False
+
+UNATTENDED_UPGRADES_LOG = Path("/var/log/unattended-upgrades/unattended-upgrades.log")
+
+def get_startup_reason():
+    """
+    Best-effort explanation for why the process is starting, so a restart
+    triggered by unattended-upgrades/needrestart isn't mistaken for a manual
+    restart. Looks for an upgrade cycle that finished shortly before now.
+    """
+    try:
+        lines = UNATTENDED_UPGRADES_LOG.read_text().splitlines()
+    except OSError:
+        return "manual start or deploy"
+    cutoff = datetime.now() - timedelta(minutes=10)
+    for line in reversed(lines):
+        if "All upgrades installed" not in line:
+            continue
+        try:
+            ts = datetime.strptime(line[:19], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        if ts >= cutoff:
+            return "automatic system security updates (unattended-upgrades/needrestart)"
+        break
+    return "manual start or deploy"
 
 def load_inactive_tickers():
     global inactive_tickers
@@ -193,7 +219,7 @@ def write_heartbeat():
         logger.exception("Failed to write bot heartbeat")
 
 if __name__ == "__main__":
-    send_routine("Bot started. <@375084779256676353>")
+    send_routine(f"Bot started. Reason: {get_startup_reason()}. <@375084779256676353>")
     load_inactive_tickers()
     write_heartbeat()
     schedule.every(1).minutes.do(write_heartbeat)
