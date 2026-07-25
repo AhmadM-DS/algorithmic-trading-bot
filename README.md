@@ -7,10 +7,11 @@ FastAPI + static-HTML dashboard for reviewing activity.
 
 ## How it works
 
-1. **Screen** — `src/screener.py` queries the TradingView scanner for tickers
-   matching `DEFAULT_FILTERS` in [src/config.py](src/config.py) (price range,
-   % change, relative volume, float size). The screener refreshes once daily
-   at market open.
+1. **Screen** — `src/screener.py` queries the Financial Modeling Prep (FMP)
+   API for today's biggest gainers, then filters down to tickers matching
+   `DEFAULT_FILTERS` in [src/config.py](src/config.py) (price range, % change,
+   relative volume via yfinance, float size via FMP). The screener refreshes
+   once daily at market open.
 2. **Load data** — `src/cleaner.py` pulls and cleans OHLCV data per ticker.
 3. **Evaluate strategies** — every ticker in the screener cache is run through
    each strategy on a schedule tied to market hours
@@ -46,7 +47,7 @@ src/                  Bot source code
   strategies/          One module per trading strategy + shared base class
   patterns/            Candlestick / price-action pattern detectors
   indicators/          Technical indicator implementations
-  screener.py          TradingView-based ticker screener
+  screener.py          FMP/yfinance-based ticker screener
   cleaner.py           OHLCV data fetching/cleaning
   trader.py            Order placement and position sizing
   risk.py              Daily risk state and halting logic
@@ -82,6 +83,8 @@ docs/feature_ideas.md   Running notes on planned features
 
    - **Alpaca** — API key/secret for paper trading (`ALPACA_BASE_URL` should
      point at `paper-api.alpaca.markets`).
+   - **FMP** — `FMP_API_KEY` for the screener (free tier at
+     [financialmodelingprep.com](https://financialmodelingprep.com)).
    - **Discord** — webhook URLs for critical, trade, and routine
      notifications.
    - **Azure SQL** — server, database, user, and password for trade/metrics
