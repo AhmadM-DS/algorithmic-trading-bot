@@ -41,14 +41,13 @@ inactive_tickers = set()
 risk_state = DailyRiskState()
 market_open_today = False
 market_closed_logged = False
+ticker_cache_empty = False
 
 UNATTENDED_UPGRADES_LOG = Path("/var/log/unattended-upgrades/unattended-upgrades.log")
 
 def get_startup_reason():
     """
-    Best-effort explanation for why the process is starting, so a restart
-    triggered by unattended-upgrades/needrestart isn't mistaken for a manual
-    restart. Looks for an upgrade cycle that finished shortly before now.
+    Best-effort explanation for why the process is starting or has restarted.
     """
     try:
         lines = UNATTENDED_UPGRADES_LOG.read_text().splitlines()
@@ -103,10 +102,11 @@ def send_closing_status():
     logger.info("Market has closed for the day. Bot has stopped running.")
 
 def refresh_screener():
-    global tickers_cache
+    global tickers_cache, ticker_cache_empty
     if not is_market_open():
         logger.info("Market is closed. Skipping screener refresh.")
         return
+    ticker_cache_empty = False
     risk_state.reset_daily_state()
     screened = [t for t in get_tickers(Strategy.filters) if t not in inactive_tickers]
     tickers_cache = screened[:MAX_TICKERS]
@@ -167,13 +167,16 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
     return account
 
 def run():
-    global market_closed_logged
+    global market_closed_logged, ticker_cache_empty
     try:
         if is_market_open():
             market_closed_logged = False
+            if ticker_cache_empty:
+                return
             if not tickers_cache:
-                send_critical("No tickers in cache. Cannot run bot. <@375084779256676353>")
-                logger.info("No tickers in cache yet. Skipping run.")
+                send_critical("No tickers in cache. Cannot run bot for the rest of today. <@375084779256676353>")
+                logger.info("No tickers in cache. Skipping run for the rest of today.")
+                ticker_cache_empty = True
                 return
             run_started = time.monotonic()
             account = api.get_account()

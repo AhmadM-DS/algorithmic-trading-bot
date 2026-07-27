@@ -6,6 +6,7 @@ for gainers/float data and yfinance for relative-volume history.
 
 #Standard Library
 import os
+import time
 from pathlib import Path
 
 #Third Party Library
@@ -22,25 +23,59 @@ API_KEY = os.getenv("FMP_API_KEY")
 
 BASE_URL = "https://financialmodelingprep.com/stable"
 RELATIVE_VOLUME_LOOKBACK_DAYS = 10
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 2
 
 
 def _get(endpoint, params=None):
     """
     Issues a GET request against an FMP `stable` endpoint and returns the
     parsed JSON body, or None if the request/response was invalid.
+
+    Transient failures (timeouts, connection errors, 429/5xx responses) are
+    retried with backoff; 4xx errors other than 429 fail immediately since
+    retrying won't fix a bad request or permissions issue.
     """
     params = dict(params or {})
     params["apikey"] = API_KEY
-    try:
-        response = requests.get(f"{BASE_URL}/{endpoint}", params=params, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException:
-        logger.error(f"HTTP request to '{endpoint}' has failed, possible network failure.")
-        return None
-    except requests.exceptions.JSONDecodeError:
-        logger.error(f"Response from '{endpoint}' returned invalid JSON.")
-        return None
+    url = f"{BASE_URL}/{endpoint}"
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code
+            if status == 429 or status >= 500:
+                if attempt < MAX_RETRIES:
+                    wait = RETRY_BACKOFF_SECONDS * attempt
+                    logger.warning(
+                        f"'{endpoint}' returned {status}, retrying in {wait}s "
+                        f"(attempt {attempt}/{MAX_RETRIES})."
+                    )
+                    time.sleep(wait)
+                    continue
+            logger.error(
+                f"HTTP request to '{endpoint}' failed with status "
+                f"{status}: {e.response.text[:300]}"
+            )
+            return None
+        except requests.exceptions.RequestException as e:
+            if attempt < MAX_RETRIES:
+                wait = RETRY_BACKOFF_SECONDS * attempt
+                logger.warning(
+                    f"HTTP request to '{endpoint}' failed ({e}), retrying in {wait}s "
+                    f"(attempt {attempt}/{MAX_RETRIES})."
+                )
+                time.sleep(wait)
+                continue
+            logger.error(f"HTTP request to '{endpoint}' has failed, possible network failure: {e}")
+            return None
+        except requests.exceptions.JSONDecodeError:
+            logger.error(f"Response from '{endpoint}' returned invalid JSON.")
+            return None
+    return None
 
 
 def _get_gainers():
