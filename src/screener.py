@@ -20,6 +20,8 @@ logger = get_logger(__name__)
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 API_KEY = os.getenv("FMP_API_KEY")
+if not API_KEY:
+    logger.error("FMP_API_KEY is not set; screener requests will fail with 401.")
 
 BASE_URL = "https://financialmodelingprep.com/stable"
 RELATIVE_VOLUME_LOOKBACK_DAYS = 10
