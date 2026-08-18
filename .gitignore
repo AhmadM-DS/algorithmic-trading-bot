@@ -211,3 +211,7 @@ tests/
 
 #Future plans and eventually real docs
 docs/
+
+# Generated market data CSVs (regenerated from yfinance, not source)
+data/raw/
+data/cleaned/
