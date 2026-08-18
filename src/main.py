@@ -166,17 +166,27 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
         logger.warning(f"Could not get price of {ticker}, skipping.")
     return account
 
+def trade_ICT():
+    ticker = 'SPY'
+    with get_connection() as conn:
+        reconcile_bracket_exits(conn, risk_state)
+        df = load_ticker_data(ticker)
+        strategy = ICT("ICT", df=df, ticker=ticker, initial_capital=10000)
+        account = api.get_account()
+        account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
+        sync_order_statuses(conn)
+
 def run():
     global market_closed_logged, ticker_cache_empty
     try:
         if is_market_open():
             market_closed_logged = False
-            if ticker_cache_empty:
-                return
             if not tickers_cache:
-                send_critical("No tickers in cache. Cannot run bot for the rest of today. <@375084779256676353>")
-                logger.info("No tickers in cache. Skipping run for the rest of today.")
-                ticker_cache_empty = True
+                if not ticker_cache_empty:
+                    send_critical("No tickers in cache. Cannot run bot for the rest of today. <@375084779256676353>")
+                    logger.info("No tickers in cache. Skipping run for the rest of today.")
+                    ticker_cache_empty = True
+                trade_ICT()
                 return
             run_started = time.monotonic()
             account = api.get_account()

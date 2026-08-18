@@ -208,3 +208,6 @@ __marimo__/
 
 # Local scratch tests (not published)
 tests/
+
+#Future plans and eventually real docs
+docs/
