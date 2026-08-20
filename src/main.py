@@ -183,9 +183,11 @@ def run():
             market_closed_logged = False
             if not tickers_cache:
                 if not ticker_cache_empty:
-                    send_critical("No tickers in cache. Cannot run bot for the rest of today. <@375084779256676353>")
-                    logger.info("No tickers in cache. Skipping run for the rest of today.")
+                    send_critical("No tickers in cache for initial run. <@375084779256676353>")
+                    logger.info("No tickers in cache for initial run, switching to plan B.")
                     ticker_cache_empty = True
+                send_critical("Only trading ICT on SPY today. <@375084779256676353>")
+                logger.info("Only trading ICT on SPY today.")
                 trade_ICT()
                 return
             run_started = time.monotonic()
