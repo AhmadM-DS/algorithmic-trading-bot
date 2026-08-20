@@ -42,6 +42,7 @@ risk_state = DailyRiskState()
 market_open_today = False
 market_closed_logged = False
 ticker_cache_empty = False
+ict_only_today = False
 
 UNATTENDED_UPGRADES_LOG = Path("/var/log/unattended-upgrades/unattended-upgrades.log")
 
@@ -177,7 +178,7 @@ def trade_ICT():
         sync_order_statuses(conn)
 
 def run():
-    global market_closed_logged, ticker_cache_empty
+    global market_closed_logged, ticker_cache_empty, ict_only_today
     try:
         if is_market_open():
             market_closed_logged = False
@@ -186,8 +187,10 @@ def run():
                     send_critical("No tickers in cache for initial run. <@375084779256676353>")
                     logger.info("No tickers in cache for initial run, switching to plan B.")
                     ticker_cache_empty = True
-                send_critical("Only trading ICT on SPY today. <@375084779256676353>")
-                logger.info("Only trading ICT on SPY today.")
+                if not ict_only_today:
+                    send_critical("Only trading ICT on SPY today. <@375084779256676353>")
+                    logger.info("Only trading ICT on SPY today.")
+                    ict_only_today = True
                 trade_ICT()
                 return
             run_started = time.monotonic()
