@@ -1,7 +1,7 @@
 """
 screener.py
 Screen for momentum tickers using the Financial Modeling Prep (FMP) API
-for gainers/float data and yfinance for relative-volume history.
+for gainers data and yfinance for relative-volume history and float data.
 """
 
 #Standard Library
@@ -116,10 +116,12 @@ def _get_float_shares(symbol):
     Returns the current floating share count for `symbol`, or None if
     unavailable.
     """
-    data = _get("shares-float", {"symbol": symbol})
-    if not isinstance(data, list) or not data:
+    try:
+        info = yf.Ticker(symbol).get_info()
+    except Exception as e:
+        logger.warning(f"Failed to fetch float shares for '{symbol}' from yfinance: {e}")
         return None
-    return data[0].get("floatShares")
+    return info.get("floatShares")
 
 
 def get_tickers(filters):
