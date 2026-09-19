@@ -2,6 +2,8 @@ alpaca_trade_api==3.2.0
 matplotlib==3.11.0
 pandas==3.0.3
 pyodbc==5.3.0
+pytest==9.1.1
+pytest-cov==7.1.0
 python-dotenv==1.2.2
 Requests==2.34.2
 schedule==1.2.2

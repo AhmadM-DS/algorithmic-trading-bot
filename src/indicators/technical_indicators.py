@@ -28,12 +28,16 @@ class RSI(Indicator):
         deltas = prices.diff().dropna()
         gains = deltas.where(deltas > 0, 0)
         losses = (-deltas).where(deltas < 0, 0)
-
         avg_gain = gains.rolling(self.period).mean()
         avg_loss = losses.rolling(self.period).mean()
 
+        for i in range(self.period, len(gains)):
+            avg_gain.iloc[i] = (avg_gain.iloc[i - 1] * (self.period - 1) + gains.iloc[i]) / self.period
+            avg_loss.iloc[i] = (avg_loss.iloc[i - 1] * (self.period - 1) + losses.iloc[i]) / self.period
+
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
+        rsi[avg_loss == 0] = 100.00
         return rsi
 
     def update(self, new_candle):
