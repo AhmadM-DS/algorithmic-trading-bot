@@ -2,8 +2,7 @@
 
 A Python trading bot that screens for momentum stocks, evaluates them against
 several trading strategies, and places paper trades through Alpaca. It logs
-every trade and backtest run to an Azure SQL database and ships with a small
-FastAPI + static-HTML dashboard for reviewing activity.
+every trade and backtest run to an Azure SQL database
 
 ## How it works
 
@@ -58,9 +57,6 @@ src/                  Bot source code
   logger.py            Logging setup
   config.py            Global settings (filters, risk defaults)
 sql/schema.sql          Azure SQL schema (Orders, Trades, Metrics, ...)
-website/
-  backend/             FastAPI app serving trade/expense dashboards
-  frontend/            Static HTML dashboard pages
 notebooks/             Exploratory/backtesting notebooks
 docs/feature_ideas.md   Running notes on planned features
 ```
@@ -100,17 +96,6 @@ docs/feature_ideas.md   Running notes on planned features
    This starts a scheduler that refreshes the screener at market open, runs
    strategy evaluation on a recurring interval during market hours, and sends
    daily open/close status notifications.
-
-## Dashboard (optional)
-
-A FastAPI backend and static frontend for reviewing trades/expenses live
-under `website/`:
-
-```bash
-pip install -r website/backend/requirements.txt
-cd website/backend
-uvicorn main:app --reload
-```
 
 ## Status
 
