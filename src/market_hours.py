@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 #Local imports
 from alpaca_client import api
+from config.constants import TRADING_INTERVAL, MARKET_OPEN_TIME
 from logger import get_logger
 logger = get_logger(__name__)
 
@@ -21,7 +22,7 @@ def is_market_open():
 def is_weekend():
     return datetime.now(MARKET_TZ).weekday() >= 5
 
-def market_time_slots(start="09:30", end="16:00", interval=15):
+def market_time_slots(start=MARKET_OPEN_TIME, end="16:00", interval=TRADING_INTERVAL):
     slots = []
     current = datetime.strptime(start, "%H:%M")
     end_time = datetime.strptime(end, "%H:%M")
