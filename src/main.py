@@ -6,6 +6,7 @@ Pipline that runs the bot on schedule.
 #TODO AS WE REFACTOR MAIN.PY, REMOVE OLD IMPORTS
 from config.settings import load_env_vars
 from config.constants import MAX_TICKERS, UNATTENDED_UPGRADES_LOG_PATH, MARKET_OPEN_TIME, CLOSING_STATUS_TIME, DISCORD_MENTION
+from alpaca_client import create_alpaca_client
 
 
 # Standard Library
@@ -13,17 +14,14 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests
+import os
 
 # Third Party Libraries
 import schedule
-from dotenv import load_dotenv
-
-# Load environment variables
-load_env_vars()
 
 # Local Imports
 from db import get_connection, update_heartbeat, insert_trade, get_inactive_tickers, mark_ticker_inactive
-from alpaca_client import api, tradeapi
+from alpaca_client import tradeapi
 from trader import place_market_order, has_position, sync_order_statuses, size_position, reconcile_bracket_exits
 from screener import get_tickers
 from cleaner import load_ticker_data
@@ -39,6 +37,7 @@ from notifications import send_critical, send_routine, send_trades
 from risk import DailyRiskState
 from logger import get_logger
 logger = get_logger(__name__)
+
 
 unattended_upgrade_log = Path(UNATTENDED_UPGRADES_LOG_PATH)
 
@@ -87,7 +86,7 @@ def send_daily_status():
     Once-a-day health check to make sure bot is running properly.
     """
     global market_open_today
-    market_open_today = is_market_open()
+    market_open_today = is_market_open(api)
     if market_open_today:
         send_routine("Market is open. Bot is running today.")
         logger.info("Market is open. Bot is running today.")
@@ -110,7 +109,7 @@ def send_closing_status():
 
 def refresh_screener():
     global tickers_cache, ticker_cache_empty
-    if not is_market_open():
+    if not is_market_open(api):
         logger.info("Market is closed. Skipping screener refresh.")
         return
     ticker_cache_empty = False
@@ -139,7 +138,7 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
                 send_trades(f"Order not executed. Attempted to purchase 0 shares of {ticker}.")
                 logger.warning("Order not executed: Quantity is 0.")
                 return account
-            result = place_market_order(conn, ticker, quantity, side="buy", price=current_price)
+            result = place_market_order(api, conn, ticker, quantity, side="buy", price=current_price)
             if "Order Placed" in result:
                 risk_state.record_buy(ticker, strategy.name, current_price, quantity)
                 insert_trade(conn, strategy.name, ticker, side="buy", quantity=quantity,
@@ -152,13 +151,13 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
             if risk_state.already_executed(ticker, strategy.name, "sell"):
                 logger.info(f"Duplicate sell signal skipped: {strategy.name} on {ticker}.")
                 return account
-            if has_position(ticker):
+            if has_position(api, ticker):
                 entry_qty = risk_state.get_entry_quantity(strategy.name, ticker)
                 if entry_qty is None:
                     logger.warning(f"No recorded entry for {strategy.name} on {ticker}; skipping sell (unknown quantity).")
                     return account
                 entry_price = risk_state.get_entry_price(strategy.name, ticker)
-                result = place_market_order(conn, ticker, entry_qty, side="sell", price=current_price, entry_price=entry_price)
+                result = place_market_order(api, conn, ticker, entry_qty, side="sell", price=current_price, entry_price=entry_price)
                 if "Order Placed" in result:
                     profit = (current_price - entry_price) * entry_qty if entry_price is not None else None
                     risk_state.record_sell(ticker, strategy.name, current_price, entry_qty)
@@ -176,17 +175,17 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
 def trade_ICT():
     ticker = 'SPY'
     with get_connection() as conn:
-        reconcile_bracket_exits(conn, risk_state)
+        reconcile_bracket_exits(api, conn, risk_state)
         df = load_ticker_data(ticker)
         strategy = ICT("ICT", df=df, ticker=ticker, initial_capital=10000)
         account = api.get_account()
         account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
-        sync_order_statuses(conn)
+        sync_order_statuses(api, conn)
 
 def run():
     global market_closed_logged, ticker_cache_empty, ict_only_today
     try:
-        if is_market_open():
+        if is_market_open(api):
             market_closed_logged = False
             if not tickers_cache:
                 if not ticker_cache_empty:
@@ -202,7 +201,7 @@ def run():
             run_started = time.monotonic()
             account = api.get_account()
             with get_connection() as conn:
-                reconcile_bracket_exits(conn, risk_state)
+                reconcile_bracket_exits(api, conn, risk_state)
                 for ticker in tickers_cache:
                     if ticker in inactive_tickers:
                         continue
@@ -220,7 +219,7 @@ def run():
                     ]
                     for strategy in strategies:
                         account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
-                sync_order_statuses(conn)
+                sync_order_statuses(api, conn)
             elapsed = time.monotonic() - run_started
             logger.info(f"run() completed in {elapsed:.1f}s for {len(tickers_cache)} tickers.")
             if elapsed > 600:
@@ -244,6 +243,10 @@ def write_heartbeat():
         logger.exception("Failed to write bot heartbeat")
 
 if __name__ == "__main__":
+    # Load environment variables
+    load_env_vars()
+    #Create the alpaca client
+    api = create_alpaca_client(api_key=os.environ["ALPACA_API_KEY"], secret_key=os.environ["ALPACA_SECRET_KEY"], base_url=os.environ["ALPACA_BASE_URL"])
     send_routine(f"Bot started. Reason: {get_startup_reason()}. {DISCORD_MENTION}")
     load_inactive_tickers()
     write_heartbeat()

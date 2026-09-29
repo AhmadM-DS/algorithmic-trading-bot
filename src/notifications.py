@@ -7,20 +7,11 @@ Send messages to a dedicated discord channel.
 import os
 
 #Third Party Library
-from dotenv import load_dotenv
 import requests
 
 #Local imports
 from logger import get_logger
 logger = get_logger(__name__)
-
-#Load environment variables
-load_dotenv()
-CRITICAL_HOOK = os.getenv("DISCORD_CRITICAL_HOOK")
-TRADES_HOOK = os.getenv("DISCORD_TRADES_HOOK")
-ROUTINE_HOOK = os.getenv("DISCORD_ROUTINE_HOOK")
-if not all ([CRITICAL_HOOK, TRADES_HOOK, ROUTINE_HOOK]):
-    logger.warning("One or more environment variables are missing.")
 
 def _send(url, message):
     try:
@@ -36,13 +27,10 @@ def _send(url, message):
         return False
 
 def send_critical(message):
-    return _send(CRITICAL_HOOK, message)
+    return _send(os.environ["DISCORD_CRITICAL_HOOK"], message)
 
 def send_trades(message):
-    return _send(TRADES_HOOK, message)
+    return _send(os.environ["DISCORD_TRADES_HOOK"], message)
 
 def send_routine(message):
-    return _send(ROUTINE_HOOK, message)
-
-if __name__ == "__main__":
-    print("Critical:", send_critical("testing if ping works <@375084779256676353>"))
+    return _send(os.environ["DISCORD_ROUTINE_HOOK"], message)

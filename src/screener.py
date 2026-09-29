@@ -7,22 +7,15 @@ for gainers data and yfinance for relative-volume history and float data.
 #Standard Library
 import os
 import time
-from pathlib import Path
 
 #Third Party Library
 import requests
 import yfinance as yf
-from dotenv import load_dotenv
 
 #Local imports
 from logger import get_logger
 logger = get_logger(__name__)
 from config.constants import RELATIVE_VOLUME_LOOKBACK_DAYS, MAX_RETRIES, RETRY_BACKOFF_SECONDS
-
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
-API_KEY = os.getenv("FMP_API_KEY")
-if not API_KEY:
-    logger.error("FMP_API_KEY is not set; screener requests will fail with 401.")
 
 BASE_URL = "https://financialmodelingprep.com/stable"
 
@@ -38,7 +31,7 @@ def _get(endpoint, params=None):
     retrying won't fix a bad request or permissions issue.
     """
     params = dict(params or {})
-    params["apikey"] = API_KEY
+    params["apikey"] = os.environ["FMP_API_KEY"]
     url = f"{BASE_URL}/{endpoint}"
 
     for attempt in range(1, MAX_RETRIES + 1):
