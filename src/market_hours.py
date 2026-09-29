@@ -8,14 +8,14 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 #Local imports
-from alpaca_client import api
 from config.constants import TRADING_INTERVAL, MARKET_OPEN_TIME
 from logger import get_logger
 logger = get_logger(__name__)
 
 MARKET_TZ = ZoneInfo("America/New_York")
 
-def is_market_open():
+
+def is_market_open(api):
     clock = api.get_clock()
     return clock.is_open
 

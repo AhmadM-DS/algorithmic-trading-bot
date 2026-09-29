@@ -7,8 +7,6 @@ Connect to Azure SQL.
 import pyodbc
 import os
 from datetime import datetime
-from dotenv import load_dotenv
-load_dotenv()
 
 #Local imports
 from logger import get_logger
@@ -16,10 +14,10 @@ logger = get_logger(__name__)
 
 
 def get_connection():
-    server = os.getenv("DB_SERVER")
-    database = os.getenv("DB_NAME")
-    username = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
+    server = os.environ["DB_SERVER"]
+    database = os.environ["DB_NAME"]
+    username = os.environ["DB_USER"]
+    password = os.environ["DB_PASSWORD"]
 
     conn = pyodbc.connect(
         "DRIVER={ODBC Driver 18 for SQL Server};"

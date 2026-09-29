@@ -4,7 +4,7 @@ Placing an order with Alpaca API.
 """
 
 #Local Import
-from alpaca_client import api, tradeapi
+from alpaca_client import tradeapi
 from config.constants import PER_TRADE_PROFIT_TARGET_PCT, PER_TRADE_STOP_LOSS_PCT
 from db import update_order_status, insert_order, insert_trade
 from notifications import send_trades
@@ -12,7 +12,7 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 #Restrictions for placing orders
-def has_position(ticker):
+def has_position(api, ticker):
     """
     Parameters:
         ticker (str): The stock symbol.
@@ -44,7 +44,7 @@ def _is_inactive_asset_error(reason):
     reason_lower = reason.lower()
     return "not active" in reason_lower or "not tradable" in reason_lower
 
-def place_market_order(conn, ticker, quantity, side, price, entry_price=None):
+def place_market_order(api, conn, ticker, quantity, side, price, entry_price=None):
     """
     Place a buy or sell order using custom arguments.
 
@@ -99,7 +99,7 @@ def place_market_order(conn, ticker, quantity, side, price, entry_price=None):
         send_trades(f"Unable to {side} {quantity} shares of ${ticker}. Reason: {reason}")
         return {"Order Failed": reason, "Inactive": _is_inactive_asset_error(reason)}
 
-def reconcile_bracket_exits(conn, risk_state):
+def reconcile_bracket_exits(api, conn, risk_state):
     """
     Detects positions that Alpaca closed on its own via a bracket order's
     take-profit/stop-loss leg and records the realized P/L so daily risk tracking and
@@ -125,7 +125,7 @@ def reconcile_bracket_exits(conn, risk_state):
         logger.info(message)
         send_trades(message)
 
-def sync_order_statuses(conn):
+def sync_order_statuses(api, conn):
     open_orders = api.list_orders(status='open')
     for order in open_orders:
         update_order_status(conn, order.id, order.status)
