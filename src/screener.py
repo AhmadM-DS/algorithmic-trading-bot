@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 #Local imports
 from logger import get_logger
 logger = get_logger(__name__)
+from config.constants import RELATIVE_VOLUME_LOOKBACK_DAYS, MAX_RETRIES, RETRY_BACKOFF_SECONDS
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 API_KEY = os.getenv("FMP_API_KEY")
@@ -24,9 +25,7 @@ if not API_KEY:
     logger.error("FMP_API_KEY is not set; screener requests will fail with 401.")
 
 BASE_URL = "https://financialmodelingprep.com/stable"
-RELATIVE_VOLUME_LOOKBACK_DAYS = 10
-MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = 2
+
 
 
 def _get(endpoint, params=None):

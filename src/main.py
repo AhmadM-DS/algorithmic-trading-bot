@@ -5,6 +5,7 @@ Pipline that runs the bot on schedule.
 
 #TODO AS WE REFACTOR MAIN.PY, REMOVE OLD IMPORTS
 from config.settings import load_env_vars
+from config.constants import MAX_TICKERS, UNATTENDED_UPGRADES_LOG_PATH, MARKET_OPEN_TIME, CLOSING_STATUS_TIME, DISCORD_MENTION
 
 
 # Standard Library
@@ -39,7 +40,7 @@ from risk import DailyRiskState
 from logger import get_logger
 logger = get_logger(__name__)
 
-MAX_TICKERS = 20
+unattended_upgrade_log = Path(UNATTENDED_UPGRADES_LOG_PATH)
 
 tickers_cache = []
 inactive_tickers = set()
@@ -49,14 +50,14 @@ market_closed_logged = False
 ticker_cache_empty = False
 ict_only_today = False
 
-UNATTENDED_UPGRADES_LOG = Path("/var/log/unattended-upgrades/unattended-upgrades.log")
+
 
 def get_startup_reason():
     """
     Best-effort explanation for why the process is starting or has restarted.
     """
     try:
-        lines = UNATTENDED_UPGRADES_LOG.read_text().splitlines()
+        lines = unattended_upgrade_log.read_text().splitlines()
     except OSError:
         return "manual start or deploy"
     cutoff = datetime.now() - timedelta(minutes=10)
@@ -168,7 +169,7 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
                     inactive_tickers.add(ticker)
                     mark_ticker_inactive(conn, ticker, result["Order Failed"])
     except AttributeError:
-        send_critical(f"Could not get price of {ticker}, skipping. <@375084779256676353>")
+        send_critical(f"Could not get price of {ticker}, skipping. {DISCORD_MENTION}")
         logger.warning(f"Could not get price of {ticker}, skipping.")
     return account
 
@@ -189,11 +190,11 @@ def run():
             market_closed_logged = False
             if not tickers_cache:
                 if not ticker_cache_empty:
-                    send_critical("No tickers in cache for initial run. <@375084779256676353>")
+                    send_critical(f"No tickers in cache for initial run. {DISCORD_MENTION}")
                     logger.info("No tickers in cache for initial run, switching to plan B.")
                     ticker_cache_empty = True
                 if not ict_only_today:
-                    send_critical("Only trading ICT on SPY today. <@375084779256676353>")
+                    send_critical(f"Only trading ICT on SPY today. {DISCORD_MENTION}")
                     logger.info("Only trading ICT on SPY today.")
                     ict_only_today = True
                 trade_ICT()
@@ -230,10 +231,10 @@ def run():
                 market_closed_logged = True
     except tradeapi.rest.APIError as e:
         logger.exception("Alpaca API rejected a request in run().")
-        send_critical(f"Alpaca API error in run(): {e}. <@375084779256676353>")
+        send_critical(f"Alpaca API error in run(): {e}. {DISCORD_MENTION}")
     except requests.exceptions.RequestException as e:
         logger.exception("Cannot connect to Alpaca API in run().")
-        send_critical(f"Cannot connect to Alpaca API in run(): {e}. <@375084779256676353>")
+        send_critical(f"Cannot connect to Alpaca API in run(): {e}. {DISCORD_MENTION}")
 
 def write_heartbeat():
     try:
@@ -243,15 +244,15 @@ def write_heartbeat():
         logger.exception("Failed to write bot heartbeat")
 
 if __name__ == "__main__":
-    send_routine(f"Bot started. Reason: {get_startup_reason()}. <@375084779256676353>")
+    send_routine(f"Bot started. Reason: {get_startup_reason()}. {DISCORD_MENTION}")
     load_inactive_tickers()
     write_heartbeat()
     schedule.every(1).minutes.do(write_heartbeat)
-    schedule.every().day.at("09:30").do(send_daily_status)
-    schedule.every().day.at("09:30").do(refresh_screener)
+    schedule.every().day.at(MARKET_OPEN_TIME).do(send_daily_status)
+    schedule.every().day.at(MARKET_OPEN_TIME).do(refresh_screener)
     for slot in market_time_slots():
         schedule.every().day.at(slot).do(run)
-    schedule.every().day.at("16:01").do(send_closing_status)
+    schedule.every().day.at(CLOSING_STATUS_TIME).do(send_closing_status)
     try:
         while True:
             schedule.run_pending()
@@ -260,5 +261,5 @@ if __name__ == "__main__":
         send_routine("Manually stopped the bot.")
     except Exception as e:
         logger.exception("Bot crashed unexpectedly")
-        send_critical(f"CRITICAL: Bot crashed. Reason: {e} <@375084779256676353>")
+        send_critical(f"CRITICAL: Bot crashed. Reason: {e} {DISCORD_MENTION}")
         raise

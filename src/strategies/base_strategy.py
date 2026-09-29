@@ -13,14 +13,14 @@ import matplotlib.pyplot as plt
 #Local imports
 from logger import get_logger
 logger = get_logger(__name__)
-from config.constants import DEFAULT_FILTERS
+from config.constants import DEFAULT_FILTERS, RISK_FRACTION, INITIAL_CAPITAL
 from db import get_connection, insert_trade, insert_metrics
 
 class Strategy:
     #Every strategy will inherit from this parent class
     filters = DEFAULT_FILTERS
-    risk_fraction = 0.25
-    def __init__(self, name, df, ticker, initial_capital):
+    risk_fraction = RISK_FRACTION
+    def __init__(self, name, df, ticker, initial_capital=INITIAL_CAPITAL):
         """
         Parameters:
             name (str): The name of the strategy.
