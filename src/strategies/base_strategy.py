@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 #Local imports
 from logger import get_logger
 logger = get_logger(__name__)
-from config import DEFAULT_FILTERS
+from config.constants import DEFAULT_FILTERS
 from db import get_connection, insert_trade, insert_metrics
 
 class Strategy:

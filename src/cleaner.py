@@ -13,7 +13,7 @@ import yfinance as yf
 import pandas as pd
 
 #Local imports
-from config import DEFAULT_LOOKBACK_DAYS
+from config.constants import DEFAULT_LOOKBACK_DAYS
 from logger import get_logger
 
 logger = get_logger(__name__)

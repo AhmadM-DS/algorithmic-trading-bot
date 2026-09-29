@@ -1,6 +1,6 @@
 """
-config.py
-Global configuration settings for the trading bot.
+constants.py
+Global constants for the trading bot.
 """
 
 DEFAULT_FILTERS = {

@@ -3,7 +3,7 @@ risk.py
 Handles the risk management logic.
 """
 
-from config import DEFAULT_LOSS_LIMIT, DEFAULT_PROFIT_TARGET
+from config.constants import DEFAULT_LOSS_LIMIT, DEFAULT_PROFIT_TARGET
 from notifications import send_routine
 from logger import get_logger
 logger = get_logger(__name__)
