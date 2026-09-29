@@ -5,7 +5,7 @@ Placing an order with Alpaca API.
 
 #Local Import
 from alpaca_client import api, tradeapi
-from config import PER_TRADE_PROFIT_TARGET_PCT, PER_TRADE_STOP_LOSS_PCT
+from config.constants import PER_TRADE_PROFIT_TARGET_PCT, PER_TRADE_STOP_LOSS_PCT
 from db import update_order_status, insert_order, insert_trade
 from notifications import send_trades
 from logger import get_logger

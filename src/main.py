@@ -3,6 +3,10 @@ main.py
 Pipline that runs the bot on schedule.
 """
 
+#TODO AS WE REFACTOR MAIN.PY, REMOVE OLD IMPORTS
+from config.settings import load_env_vars
+
+
 # Standard Library
 import time
 from datetime import datetime, timedelta
@@ -14,7 +18,7 @@ import schedule
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
+load_env_vars()
 
 # Local Imports
 from db import get_connection, update_heartbeat, insert_trade, get_inactive_tickers, mark_ticker_inactive
