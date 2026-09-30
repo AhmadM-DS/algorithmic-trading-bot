@@ -243,11 +243,12 @@ def write_heartbeat():
         logger.exception("Failed to write bot heartbeat")
 
 if __name__ == "__main__":
-    # Load environment variables
-    load_env_vars()
+    # Load environment variables and set the trading mode
+    trading_mode = load_env_vars()
     #Create the alpaca client
-    api = create_alpaca_client(api_key=os.environ["ALPACA_API_KEY"], secret_key=os.environ["ALPACA_SECRET_KEY"], base_url=os.environ["ALPACA_BASE_URL"])
-    send_routine(f"Bot started. Reason: {get_startup_reason()}. {DISCORD_MENTION}")
+    api = create_alpaca_client(api_key=os.environ[f"ALPACA_API_KEY_{trading_mode}"], secret_key=os.environ[f"ALPACA_SECRET_KEY_{trading_mode}"], base_url=os.environ[f"ALPACA_BASE_URL_{trading_mode}"])
+    if trading_mode == "LIVE":
+        send_critical(f"Bot started in {trading_mode} mode. Reason: {get_startup_reason()}. {DISCORD_MENTION}")
     load_inactive_tickers()
     write_heartbeat()
     schedule.every(1).minutes.do(write_heartbeat)
