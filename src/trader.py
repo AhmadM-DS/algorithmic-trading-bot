@@ -3,8 +3,21 @@ trader.py
 Placing an order with Alpaca API.
 """
 
+#Third Party Imports
+from alpaca.common.exceptions import APIError
+from alpaca.trading.requests import GetOrdersRequest
+from alpaca.trading.enums import (
+    QueryOrderStatus,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    TimeInForce,
+    OrderClass
+)
+from alpaca.common.enums import Sort
+from alpaca.trading.requests import MarketOrderRequest
+
 #Local Import
-from alpaca_client import tradeapi
 from config.constants import PER_TRADE_PROFIT_TARGET_PCT, PER_TRADE_STOP_LOSS_PCT
 from db import update_order_status, insert_order, insert_trade
 from notifications import send_trades
@@ -12,16 +25,16 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 #Restrictions for placing orders
-def has_position(api, ticker):
+def has_position(trading_client, ticker):
     """
     Parameters:
         ticker (str): The stock symbol.
     """
     try:
-        api.get_position(ticker)
+        trading_client.get_open_position(ticker)
         logger.info("Trade authorized. Position found.")
         return True
-    except tradeapi.rest.APIError as e:
+    except APIError as e:
         if e.status_code == 404:
             logger.warning("Trade blocked. Position not found.")
             return False
@@ -44,7 +57,7 @@ def _is_inactive_asset_error(reason):
     reason_lower = reason.lower()
     return "not active" in reason_lower or "not tradable" in reason_lower
 
-def place_market_order(api, conn, ticker, quantity, side, price, entry_price=None):
+def place_market_order(trading_client, conn, ticker, quantity, side, price, entry_price=None):
     """
     Place a buy or sell order using custom arguments.
 
@@ -62,24 +75,24 @@ def place_market_order(api, conn, ticker, quantity, side, price, entry_price=Non
     """
     try:
         if side == "buy":
-            order = api.submit_order(
-                symbol=ticker,
-                qty=quantity,
-                side=side,
-                type="market",
-                time_in_force="day",
-                order_class="bracket",
-                take_profit={"limit_price": round(price * (1 + PER_TRADE_PROFIT_TARGET_PCT), 2)},
-                stop_loss={"stop_price": round(price * (1 - PER_TRADE_STOP_LOSS_PCT), 2)}
-            )
+            order = trading_client.submit_order(
+                MarketOrderRequest(
+                    symbol=ticker,
+                    qty=quantity,
+                    side=OrderSide.BUY,
+                    type=OrderType.MARKET,
+                    time_in_force=TimeInForce.DAY,
+                    #order_class=OrderClass.BRACKET
+            ))
         else:
-            order = api.submit_order(
-                symbol=ticker,
-                qty=quantity,
-                side=side,
-                type="market",
-                time_in_force="day"
-            )
+            order = trading_client.submit_order(
+                MarketOrderRequest(
+                    symbol=ticker,
+                    qty=quantity,
+                    side=OrderSide.SELL,
+                    type=OrderType.MARKET,
+                    time_in_force=TimeInForce.DAY,
+            ))
 
         profit = None
         if side == "sell" and entry_price is not None:
@@ -93,23 +106,23 @@ def place_market_order(api, conn, ticker, quantity, side, price, entry_price=Non
         send_trades(message)
         order_id = insert_order(conn, order.id, ticker, side, quantity, price, order.status, profit=profit)
         return {"Order Placed": order, "Order_ID": order_id}
-    except tradeapi.rest.APIError as e:
+    except APIError as e:
         reason = str(e)
         logger.error(f"Unable to {side} {quantity} shares of ${ticker}. Reason: {reason}")
         send_trades(f"Unable to {side} {quantity} shares of ${ticker}. Reason: {reason}")
         return {"Order Failed": reason, "Inactive": _is_inactive_asset_error(reason)}
 
-def reconcile_bracket_exits(api, conn, risk_state):
+def reconcile_bracket_exits(trading_client, conn, risk_state):
     """
     Detects positions that Alpaca closed on its own via a bracket order's
     take-profit/stop-loss leg and records the realized P/L so daily risk tracking and
     the Trades table stay accurate.
     """
     for (strategy_name, ticker), (entry_price, _entry_qty) in list(risk_state.strategy_entry_prices.items()):
-        if has_position(ticker):
+        if has_position(trading_client, ticker):
             continue
-        closed_sells = api.list_orders(status="closed", symbols=[ticker], side="sell", direction="desc", limit=5)
-        fill = next((o for o in closed_sells if o.status == "filled"), None)
+        closed_sells = trading_client.get_orders(filter=GetOrdersRequest(status=QueryOrderStatus.CLOSED, side=OrderSide.SELL, direction=Sort.DESC, symbols=[ticker], limit=5))
+        fill = next((o for o in closed_sells if o.status == OrderStatus.FILLED), None)
         if fill is None:
             logger.warning(f"Position for {ticker} ({strategy_name}) closed but no filled sell order found; cannot reconcile yet.")
             continue
@@ -125,8 +138,8 @@ def reconcile_bracket_exits(api, conn, risk_state):
         logger.info(message)
         send_trades(message)
 
-def sync_order_statuses(api, conn):
-    open_orders = api.list_orders(status='open')
+def sync_order_statuses(trading_client, conn):
+    open_orders = trading_client.get_orders(filter=GetOrdersRequest(status=QueryOrderStatus.OPEN))
     for order in open_orders:
-        update_order_status(conn, order.id, order.status)
-        logger.info(f"Updated {order.id} to {order.status}")
+        update_order_status(conn, str(order.id), str(order.status))
+        logger.info(f"Updated {str(order.id)} to {str(order.status)}")
