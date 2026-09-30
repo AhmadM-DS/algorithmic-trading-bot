@@ -6,8 +6,9 @@ Pipline that runs the bot on schedule.
 #TODO AS WE REFACTOR MAIN.PY, REMOVE OLD IMPORTS
 from config.settings import load_env_vars
 from config.constants import MAX_TICKERS, UNATTENDED_UPGRADES_LOG_PATH, MARKET_OPEN_TIME, CLOSING_STATUS_TIME, DISCORD_MENTION
-from alpaca_client import create_alpaca_client
-
+from alpaca_client import create_alpaca_trading_client, create_alpaca_shd_client
+from market_data import get_latest_price
+from alpaca.common.exceptions import APIError
 
 # Standard Library
 import time
@@ -21,7 +22,6 @@ import schedule
 
 # Local Imports
 from db import get_connection, update_heartbeat, insert_trade, get_inactive_tickers, mark_ticker_inactive
-from alpaca_client import tradeapi
 from trader import place_market_order, has_position, sync_order_statuses, size_position, reconcile_bracket_exits
 from screener import get_tickers
 from cleaner import load_ticker_data
@@ -86,7 +86,7 @@ def send_daily_status():
     Once-a-day health check to make sure bot is running properly.
     """
     global market_open_today
-    market_open_today = is_market_open(api)
+    market_open_today = is_market_open(trading_client)
     if market_open_today:
         send_routine("Market is open. Bot is running today.")
         logger.info("Market is open. Bot is running today.")
@@ -109,7 +109,7 @@ def send_closing_status():
 
 def refresh_screener():
     global tickers_cache, ticker_cache_empty
-    if not is_market_open(api):
+    if not is_market_open(trading_client):
         logger.info("Market is closed. Skipping screener refresh.")
         return
     ticker_cache_empty = False
@@ -128,7 +128,7 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
         return account
     signal = strategy.get_latest_signal()
     try:
-        current_price = api.get_latest_trade(ticker).price
+        current_price = get_latest_price(data_client=stock_data_client, ticker=ticker)
         if signal == 1:
             if risk_state.already_executed(ticker, strategy.name, "buy"):
                 logger.info(f"Duplicate buy signal skipped: {strategy.name} on {ticker}.")
@@ -138,12 +138,12 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
                 send_trades(f"Order not executed. Attempted to purchase 0 shares of {ticker}.")
                 logger.warning("Order not executed: Quantity is 0.")
                 return account
-            result = place_market_order(api, conn, ticker, quantity, side="buy", price=current_price)
+            result = place_market_order(trading_client, conn, ticker, quantity, side="buy", price=current_price)
             if "Order Placed" in result:
                 risk_state.record_buy(ticker, strategy.name, current_price, quantity)
                 insert_trade(conn, strategy.name, ticker, side="buy", quantity=quantity,
                              price=current_price, trade_type="Live", order_id=result["Order_ID"])
-                account = api.get_account()  # refresh buying power after order
+                account = trading_client.get_account()  # refresh buying power after order
             elif result.get("Inactive"):
                 inactive_tickers.add(ticker)
                 mark_ticker_inactive(conn, ticker, result["Order Failed"])
@@ -151,19 +151,19 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
             if risk_state.already_executed(ticker, strategy.name, "sell"):
                 logger.info(f"Duplicate sell signal skipped: {strategy.name} on {ticker}.")
                 return account
-            if has_position(api, ticker):
+            if has_position(trading_client, ticker):
                 entry_qty = risk_state.get_entry_quantity(strategy.name, ticker)
                 if entry_qty is None:
                     logger.warning(f"No recorded entry for {strategy.name} on {ticker}; skipping sell (unknown quantity).")
                     return account
                 entry_price = risk_state.get_entry_price(strategy.name, ticker)
-                result = place_market_order(api, conn, ticker, entry_qty, side="sell", price=current_price, entry_price=entry_price)
+                result = place_market_order(trading_client, conn, ticker, entry_qty, side="sell", price=current_price, entry_price=entry_price)
                 if "Order Placed" in result:
                     profit = (current_price - entry_price) * entry_qty if entry_price is not None else None
                     risk_state.record_sell(ticker, strategy.name, current_price, entry_qty)
                     insert_trade(conn, strategy.name, ticker, side="sell", quantity=entry_qty,
                                  price=current_price, trade_type="Live", profit=profit, order_id=result["Order_ID"])
-                    account = api.get_account()  # refresh buying power after order
+                    account = trading_client.get_account()  # refresh buying power after order
                 elif result.get("Inactive"):
                     inactive_tickers.add(ticker)
                     mark_ticker_inactive(conn, ticker, result["Order Failed"])
@@ -175,17 +175,17 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
 def trade_ICT():
     ticker = 'SPY'
     with get_connection() as conn:
-        reconcile_bracket_exits(api, conn, risk_state)
+        reconcile_bracket_exits(trading_client, conn, risk_state)
         df = load_ticker_data(ticker)
         strategy = ICT("ICT", df=df, ticker=ticker, initial_capital=10000)
-        account = api.get_account()
+        account = trading_client.get_account()
         account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
-        sync_order_statuses(api, conn)
+        sync_order_statuses(trading_client, conn)
 
 def run():
     global market_closed_logged, ticker_cache_empty, ict_only_today
     try:
-        if is_market_open(api):
+        if is_market_open(trading_client):
             market_closed_logged = False
             if not tickers_cache:
                 if not ticker_cache_empty:
@@ -199,9 +199,9 @@ def run():
                 trade_ICT()
                 return
             run_started = time.monotonic()
-            account = api.get_account()
+            account = trading_client.get_account()
             with get_connection() as conn:
-                reconcile_bracket_exits(api, conn, risk_state)
+                reconcile_bracket_exits(trading_client, conn, risk_state)
                 for ticker in tickers_cache:
                     if ticker in inactive_tickers:
                         continue
@@ -219,7 +219,7 @@ def run():
                     ]
                     for strategy in strategies:
                         account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
-                sync_order_statuses(api, conn)
+                sync_order_statuses(trading_client, conn)
             elapsed = time.monotonic() - run_started
             logger.info(f"run() completed in {elapsed:.1f}s for {len(tickers_cache)} tickers.")
             if elapsed > 600:
@@ -228,7 +228,7 @@ def run():
             if not market_closed_logged:
                 logger.warning("Market is closed. Skipping run.")
                 market_closed_logged = True
-    except tradeapi.rest.APIError as e:
+    except APIError as e:
         logger.exception("Alpaca API rejected a request in run().")
         send_critical(f"Alpaca API error in run(): {e}. {DISCORD_MENTION}")
     except requests.exceptions.RequestException as e:
@@ -246,9 +246,13 @@ if __name__ == "__main__":
     # Load environment variables and set the trading mode
     trading_mode = load_env_vars()
     #Create the alpaca client
-    api = create_alpaca_client(api_key=os.environ[f"ALPACA_API_KEY_{trading_mode}"], secret_key=os.environ[f"ALPACA_SECRET_KEY_{trading_mode}"], base_url=os.environ[f"ALPACA_BASE_URL_{trading_mode}"])
+    trading_client = create_alpaca_trading_client(api_key=os.environ[f"ALPACA_API_KEY_{trading_mode}"], secret_key=os.environ[f"ALPACA_SECRET_KEY_{trading_mode}"], paper=(trading_mode == "PAPER"))
+    stock_data_client = create_alpaca_shd_client(api_key=os.environ[f"ALPACA_API_KEY_{trading_mode}"], secret_key=os.environ[f"ALPACA_SECRET_KEY_{trading_mode}"])
     if trading_mode == "LIVE":
         send_critical(f"Bot started in {trading_mode} mode. Reason: {get_startup_reason()}. {DISCORD_MENTION}")
+    else:
+        send_routine(f"Bot started in {trading_mode} mode. Reason: {get_startup_reason()}. {DISCORD_MENTION}")
+
     load_inactive_tickers()
     write_heartbeat()
     schedule.every(1).minutes.do(write_heartbeat)

@@ -10,7 +10,7 @@ def clean_env():
         os.environ.pop(name, None)
     os.environ.pop("TRADING_MODE", None)
     for mode in ["PAPER", "LIVE"]:
-        for key in ["ALPACA_API_KEY", "ALPACA_SECRET_KEY", "ALPACA_BASE_URL"]:
+        for key in ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]:
             os.environ.pop(f"{key}_{mode}", None)
     yield
     os.environ.clear()
@@ -75,7 +75,7 @@ def test_delete_env_var(tmp_path):
 
 def test_all_env_vars_present(tmp_path):
     """Tests if all environment variables load"""
-    fake_env = write_env(tmp_path, {"TRADING_MODE": "Paper", "ALPACA_API_KEY_PAPER": "a", "ALPACA_SECRET_KEY_PAPER": "a", "ALPACA_BASE_URL_PAPER": "a"})
+    fake_env = write_env(tmp_path, {"TRADING_MODE": "Paper", "ALPACA_API_KEY_PAPER": "a", "ALPACA_SECRET_KEY_PAPER": "a"})
     load_env_vars(fake_env)
 
 #-----------------------
@@ -94,17 +94,17 @@ def test_trading_mode_misspelled(tmp_path):
 
 def test_spaces_between_mode(tmp_path):
     """Tests when trading mode is in between spaces"""
-    fake_env = write_env(tmp_path, {"TRADING_MODE": " Live ", "ALPACA_API_KEY_LIVE": "a", "ALPACA_SECRET_KEY_LIVE": "a", "ALPACA_BASE_URL_LIVE": "a"})
+    fake_env = write_env(tmp_path, {"TRADING_MODE": " Live ", "ALPACA_API_KEY_LIVE": "a", "ALPACA_SECRET_KEY_LIVE": "a"})
     load_env_vars(fake_env)
 
 def test_paper_mode_live_keys(tmp_path):
     """Tests when trading mode is paper but using live keys"""
-    fake_env = write_env(tmp_path, {"TRADING_MODE": "Paper", "ALPACA_API_KEY_LIVE": "a", "ALPACA_SECRET_KEY_LIVE": "a", "ALPACA_BASE_URL_LIVE": "a"})
+    fake_env = write_env(tmp_path, {"TRADING_MODE": "Paper", "ALPACA_API_KEY_LIVE": "a", "ALPACA_SECRET_KEY_LIVE": "a"})
     with pytest.raises(SettingsError):
         load_env_vars(fake_env)
 
 def test_live_mode_paper_keys(tmp_path):
     """Tests when trading mode is live but using paper keys"""
-    fake_env = write_env(tmp_path, {"TRADING_MODE": "Live", "ALPACA_API_KEY_PAPER": "a", "ALPACA_SECRET_KEY_PAPER": "a", "ALPACA_BASE_URL_PAPER": "a"})
+    fake_env = write_env(tmp_path, {"TRADING_MODE": "Live", "ALPACA_API_KEY_PAPER": "a", "ALPACA_SECRET_KEY_PAPER": "a"})
     with pytest.raises(SettingsError):
         load_env_vars(fake_env)

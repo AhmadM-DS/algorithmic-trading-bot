@@ -59,7 +59,7 @@ def load_env_vars(env_path=Path(__file__).parent.parent.parent / ".env") -> str:
     if trading_mode not in ALLOWED_TRADING_MODES:
         raise SettingsError(f"Received {trading_mode!r} instead of one of two: {ALLOWED_TRADING_MODES}")
     suffix = trading_mode.upper()
-    alpaca_keys_wmode = [f"ALPACA_API_KEY_{suffix}", f"ALPACA_SECRET_KEY_{suffix}", f"ALPACA_BASE_URL_{suffix}"]
+    alpaca_keys_wmode = [f"ALPACA_API_KEY_{suffix}", f"ALPACA_SECRET_KEY_{suffix}"]
     result = check_env_var(os.environ, REQUIRED_ENV_VARS + alpaca_keys_wmode)
     if result["Missing"] or result["Empty"]:
         raise SettingsError(f"""Not all environment variables loaded. 
