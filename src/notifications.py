@@ -10,8 +10,7 @@ import os
 import requests
 
 #Local imports
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 
 def _send(url, message):
     try:

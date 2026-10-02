@@ -6,9 +6,8 @@ Implementing the Momentum trading strategy by Warrior Trading.
 #Local Imports
 from strategies.base_strategy import Strategy
 from patterns.candlestick_patterns import BullFlagBreakout, FlatTopBreakout
-from logger import get_logger
+from logger import legacy_log as logger
 from market_hours import is_within_window
-logger = get_logger(__name__)
 
 """
 Strategy Workflow

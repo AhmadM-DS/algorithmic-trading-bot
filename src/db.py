@@ -9,8 +9,7 @@ import os
 from datetime import datetime
 
 #Local imports
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 
 
 def get_connection():

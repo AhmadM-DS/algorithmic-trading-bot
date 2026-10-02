@@ -6,8 +6,7 @@ Implements the ICT (Inner Circle Trader) Liquidity Sweep Strategy.
 #Local Imports
 from strategies.base_strategy import Strategy
 from patterns.candlestick_patterns import LiquiditySweep, MarketStructureShift, FairValueGap
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 
 """
 Strategy Workflow

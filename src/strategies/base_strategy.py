@@ -11,8 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 #Local imports
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 from config.constants import DEFAULT_FILTERS, RISK_FRACTION, INITIAL_CAPITAL
 from db import get_connection, insert_trade, insert_metrics
 

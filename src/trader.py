@@ -21,8 +21,7 @@ from alpaca.trading.requests import MarketOrderRequest
 from config.constants import PER_TRADE_PROFIT_TARGET_PCT, PER_TRADE_STOP_LOSS_PCT
 from db import update_order_status, insert_order, insert_trade
 from notifications import send_trades
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 
 #Restrictions for placing orders
 def has_position(trading_client, ticker):

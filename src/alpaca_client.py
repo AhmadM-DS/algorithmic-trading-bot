@@ -8,8 +8,7 @@ from alpaca.trading.client import TradingClient
 from alpaca.data.historical.stock import StockHistoricalDataClient
 
 #Local imports
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 
 
 def create_alpaca_trading_client(api_key, secret_key, paper=True):
