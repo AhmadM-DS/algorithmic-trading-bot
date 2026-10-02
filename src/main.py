@@ -35,8 +35,7 @@ from strategies.supply_demand import SupplyDemand
 from market_hours import is_market_open, is_weekend, market_time_slots
 from notifications import send_critical, send_routine, send_trades
 from risk import DailyRiskState
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 
 
 unattended_upgrade_log = Path(UNATTENDED_UPGRADES_LOG_PATH)

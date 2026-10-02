@@ -14,9 +14,8 @@ import pandas as pd
 
 #Local imports
 from config.constants import DEFAULT_LOOKBACK_DAYS
-from logger import get_logger
+from logger import legacy_log as logger
 
-logger = get_logger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 CLEANED_DIR = BASE_DIR / "data" / "cleaned"
 

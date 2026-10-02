@@ -13,8 +13,7 @@ import requests
 import yfinance as yf
 
 #Local imports
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 from config.constants import RELATIVE_VOLUME_LOOKBACK_DAYS, MAX_RETRIES, RETRY_BACKOFF_SECONDS
 
 BASE_URL = "https://financialmodelingprep.com/stable"

@@ -9,8 +9,7 @@ from zoneinfo import ZoneInfo
 
 #Local imports
 from config.constants import TRADING_INTERVAL, MARKET_OPEN_TIME
-from logger import get_logger
-logger = get_logger(__name__)
+from logger import legacy_log as logger
 
 MARKET_TZ = ZoneInfo("America/New_York")
 
