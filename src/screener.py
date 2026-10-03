@@ -30,12 +30,12 @@ def _get(endpoint, params=None):
     retrying won't fix a bad request or permissions issue.
     """
     params = dict(params or {})
-    params["apikey"] = os.environ["FMP_API_KEY"]
+    fmp_api_key = os.environ["FMP_API_KEY"]
     url = f"{BASE_URL}/{endpoint}"
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers={"apikey": fmp_api_key}, timeout=10)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError as e:

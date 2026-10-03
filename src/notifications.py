@@ -11,9 +11,11 @@ import requests
 
 #Local imports
 from logger import legacy_log as logger
+from logger import redact
 
 def _send(url, message):
     try:
+        message = redact(message)
         r = requests.post(url, json={"content": message}, timeout=10)
         if r.ok:
             logger.info(f"Successfully sent message to Discord: {message}")
