@@ -7,9 +7,9 @@ instead of waiting for the next 09:30 market-hours run.
 
 import sys
 from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from config.settings import load_env_vars
 from config.constants import DEFAULT_FILTERS
 from screener import get_tickers
 
@@ -23,4 +23,5 @@ def run_screener_test():
 
 
 if __name__ == "__main__":
+    load_env_vars()
     run_screener_test()
