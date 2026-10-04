@@ -3,7 +3,7 @@ SET QUOTED_IDENTIFIER ON;
 GO
 
 IF SCHEMA_ID('report') IS NULL
-    EXEC('CREATE SCHEMA report');
+    EXEC('CREATE SCHEMA report AUTHORIZATION dbo');
 GO
 
 -- Walks each correction chain back to the original fill, so every current
