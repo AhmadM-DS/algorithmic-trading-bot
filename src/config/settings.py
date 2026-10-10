@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 class SettingsError(Exception):
     """Raised when there is missing or empty environment variable(s)"""
 
-REQUIRED_ENV_VARS = ["DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD",
+REQUIRED_ENV_VARS = ["DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_TRUST_SERVER_CERT",
                     "DISCORD_CRITICAL_HOOK", "DISCORD_TRADES_HOOK", "DISCORD_ROUTINE_HOOK",
                     "FMP_API_KEY"]
 
