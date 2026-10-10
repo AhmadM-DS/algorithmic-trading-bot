@@ -70,3 +70,20 @@ def load_env_vars(env_path=Path(__file__).parent.parent.parent / ".env") -> str:
         raise SettingsError(f"""Not all environment variables loaded. 
                          Missing: {result["Missing"]}. Empty: {result["Empty"]}""")
     return suffix
+
+def get_market_data_profile(plan, profiles) -> dict:
+    """Return the profile for the chosen market data plan, checked at startup
+
+    Parameters:
+        plan (str): MARKET_DATA_PLAN from constants.py
+        profiles (dict): MARKET_DATA_PROFILES from constants.py
+
+    Returns:
+        The profile dict (feed, lag_minutes, min_time_frame_minutes)
+
+    Raises:
+        SettingsError if plan isn't a key in profiles (same idea as the TRADING_MODE check)
+    """
+    if plan not in profiles:
+        raise SettingsError(f"Received {plan!r} instead of one of: {list(profiles)}")
+    return profiles[plan]

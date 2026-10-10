@@ -25,6 +25,7 @@ CREATE TABLE tickers
     ticker     NVARCHAR(10) NOT NULL,
     first_seen DATE         NOT NULL,
     is_active  BIT          NOT NULL CONSTRAINT df_tickers_is_active DEFAULT 1,
+    fill_override BIT       NULL,
     CONSTRAINT pk_tickers PRIMARY KEY (ticker_id),
     CONSTRAINT uq_tickers_ticker UNIQUE (ticker)
 );

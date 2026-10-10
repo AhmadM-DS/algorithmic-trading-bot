@@ -137,14 +137,14 @@ SELECT
     tk.ticker,
     tk.first_seen,
     tk.is_active,
+    tk.fill_override,
     ISNULL(w.days_appeared, 0) AS days_appeared,
     ISNULL(w.days_selected, 0) AS days_selected,
     w.last_appeared,
     ISNULL(p.closed_positions, 0) AS closed_positions,
     ISNULL(p.profitable_trades, 0) AS profitable_trades,
-    ROW_NUMBER() OVER (
-        ORDER BY ISNULL(w.days_appeared, 0) DESC, ISNULL(p.profitable_trades, 0) DESC, tk.ticker
-    ) AS popularity_rank
+    ISNULL(p.total_realized_pnl, 0) AS total_realized_pnl,
+    CAST(CAST(p.profitable_trades AS DECIMAL(9,4)) / NULLIF(p.closed_positions, 0) AS DECIMAL(5,4)) AS win_rate
 FROM dbo.tickers tk
 LEFT JOIN
 (
@@ -161,7 +161,8 @@ LEFT JOIN
     SELECT
         ticker_id,
         COUNT(*) AS closed_positions,
-        SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS profitable_trades
+        SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS profitable_trades,
+        SUM(realized_pnl) AS total_realized_pnl
     FROM dbo.positions
     WHERE [status] = 'closed'
     GROUP BY ticker_id
