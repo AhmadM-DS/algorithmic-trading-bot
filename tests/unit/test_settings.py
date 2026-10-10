@@ -1,6 +1,7 @@
 import pytest
 import os
-from config.settings import check_env_var, load_env_vars, REQUIRED_ENV_VARS, SettingsError
+from config.settings import check_env_var, load_env_vars, get_market_data_profile, REQUIRED_ENV_VARS, SettingsError
+from config.constants import MARKET_DATA_PROFILES
 
 @pytest.fixture(autouse=True)
 def clean_env():
@@ -102,3 +103,20 @@ def test_live_mode_paper_keys(tmp_path):
     fake_env = write_env(tmp_path, {"TRADING_MODE": "Live", "ALPACA_API_KEY_PAPER": "a", "ALPACA_SECRET_KEY_PAPER": "a"})
     with pytest.raises(SettingsError):
         load_env_vars(fake_env)
+
+#-----------------------
+
+def test_every_market_data_plan_loads():
+    """Tests that each plan in constants.py returns its own profile"""
+    for plan, profile in MARKET_DATA_PROFILES.items():
+        assert get_market_data_profile(plan, MARKET_DATA_PROFILES) is profile
+
+def test_profiles_have_required_keys():
+    """Tests that every profile has the values the data module reads"""
+    for profile in MARKET_DATA_PROFILES.values():
+        assert {"feed", "lag_minutes", "min_time_frame_minutes"} <= profile.keys()
+
+def test_unknown_market_data_plan():
+    """Tests that a misspelled plan stops startup"""
+    with pytest.raises(SettingsError):
+        get_market_data_profile("delyaed", MARKET_DATA_PROFILES)

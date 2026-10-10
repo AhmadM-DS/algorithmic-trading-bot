@@ -20,3 +20,17 @@ def test_foreign_key_is_not_duplicate():
 def test_number_in_values_is_not_duplicate():
     e = make_error("Cannot insert the value NULL into column 'x', ticker_id 2627. (515) (SQLExecDirectW)")
     assert not is_duplicate_error(e)
+
+def test_to_db_time_converts_to_naive_utc():
+    import pandas as pd
+    from storage.connections import to_db_time
+    ny_time = pd.Timestamp("2026-11-24 10:00", tz="America/New_York")
+    assert to_db_time(ny_time) == pd.Timestamp("2026-11-24 15:00").to_pydatetime()
+    assert to_db_time(None) is None
+
+def test_to_db_time_rejects_naive():
+    import pandas as pd
+    import pytest
+    from storage.connections import to_db_time
+    with pytest.raises(TypeError):
+        to_db_time(pd.Timestamp("2026-11-24 10:00"))

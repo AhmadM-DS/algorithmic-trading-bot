@@ -1,3 +1,7 @@
+IF SCHEMA_ID('report') IS NULL
+    EXEC('CREATE SCHEMA report AUTHORIZATION dbo');
+GO
+
 CREATE ROLE bot_role;
 CREATE ROLE report_role;
 GO
