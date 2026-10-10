@@ -25,9 +25,7 @@ def write_env(path, extra):
 
 def test_all_keys_present():
     """Tests for all environment variables present with values"""
-    env_dict = {"DB_SERVER": "server", "DB_NAME": "name", "DB_USER": "user", "DB_PASSWORD": "pw",
-            "DISCORD_CRITICAL_HOOK": "dch", "DISCORD_TRADES_HOOK": "dth", "DISCORD_ROUTINE_HOOK": "drh",
-            "FMP_API_KEY": "fak"}
+    env_dict = {key: "a" for key in REQUIRED_ENV_VARS}
     result = check_env_var(env_dict)
     assert not any(result.values())
 
@@ -36,9 +34,7 @@ def test_some_keys_empty_rest_missing():
     env_dict = {"DB_SERVER": ""}
     result = check_env_var(env_dict)
     assert result["Empty"] == ["DB_SERVER"]
-    assert result["Missing"] == ["DB_NAME", "DB_USER", "DB_PASSWORD",
-                                "DISCORD_CRITICAL_HOOK", "DISCORD_TRADES_HOOK",
-                                "DISCORD_ROUTINE_HOOK", "FMP_API_KEY"]
+    assert result["Missing"] == [name for name in REQUIRED_ENV_VARS if name not in env_dict]
 
 
 def test_some_empty_some_missing_some_valid():
@@ -46,9 +42,7 @@ def test_some_empty_some_missing_some_valid():
     env_dict = {"DB_SERVER": "server", "DB_NAME": "", "DB_USER": ""}
     result = check_env_var(env_dict)
     assert result["Empty"] == ["DB_NAME", "DB_USER"]
-    assert result["Missing"] == ["DB_PASSWORD",
-            "DISCORD_CRITICAL_HOOK", "DISCORD_TRADES_HOOK", "DISCORD_ROUTINE_HOOK",
-            "FMP_API_KEY"]
+    assert result["Missing"] == [name for name in REQUIRED_ENV_VARS if name not in env_dict]
 
 def test_all_keys_missing():
     """Tests if all environment variables are not present"""
