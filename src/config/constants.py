@@ -28,6 +28,7 @@ UNATTENDED_UPGRADES_LOG_PATH = "/var/log/unattended-upgrades/unattended-upgrades
 
 DISCORD_MENTION = "<@375084779256676353>"
 MARKET_OPEN_TIME = "09:30"
+MARKET_CLOSE_TIME = "16:00"
 CLOSING_STATUS_TIME = "16:01"
 
 MAX_CALLS = 180
@@ -41,6 +42,9 @@ MARKET_DATA_PROFILES = {
     "live":    {"feed": "sip", "lag_minutes": 0,  "min_time_frame_minutes": 1},
 }
 PRICE_ADJUSTMENT = "split"
+SEED_TOLERANCE = 0.01
+ENABLED_HOLDING_TYPES = ["day"]
+
 
 DATA_HEALTH_SAVE = "failures"
 DATA_HEALTH_THRESHOLDS = {

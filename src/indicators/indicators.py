@@ -6,9 +6,12 @@ Technical indicators calculated from a ticker's candles
 #Third Party Imports
 import pandas as pd
 import numpy as np
+import math
 
 #Local Imports
 from data.market_calendar import NEW_YORK
+
+WINDOW_COUNTS = {"sma": 1, "ema": 1, "rsi": 1, "average_volume": 1, "volatility": 1, "macd": 3}
 
 def _check_window(window, name: str) -> None:
     """Raise ValueError unless window is a whole number of 1 or more"""
@@ -24,6 +27,61 @@ def _ema(values: pd.Series, window: int) -> pd.Series:
 def _sma(values: pd.Series, window: int) -> pd.Series:
     """Return the rolling mean of values, NaN until window values exist"""
     return values.rolling(window=window).mean()
+
+
+def _seed_updates(alpha: float, tolerance: float) -> int:
+    """Return how many updates it takes for the seed's weight to fall to tolerance or less"""
+    if alpha == 1:
+        return 0
+    return math.ceil(math.log(tolerance) / math.log(1 - alpha))
+
+def _ema_candles(alpha: float, window: int, tolerance: float) -> int:
+    """Return the candles an EMA-style average needs before its seed stops mattering"""
+    return max(window, _seed_updates(alpha, tolerance) + 1)
+
+def candles_needed(indicator: tuple, tolerance: float) -> int:
+    """Return how many candles an indicator needs before its values can be trusted
+
+    SMA-style indicators need their window. EMA-style ones (EMA, RSI, MACD) also wait
+    until their starting guess (seed) has a weight of tolerance or less.
+
+    Parameters:
+        indicator (tuple): An INDICATORS entry, e.g. ("rsi", 14) or ("macd", 12, 26, 9)
+        tolerance (float): The largest weight the seed may keep, e.g. SEED_TOLERANCE
+
+    Returns:
+        The number of candles as an int, e.g. 65 for ("rsi", 14) at 0.01
+
+    Raises:
+        ValueError for an unknown indicator, the wrong number of windows, a window that
+        isn't a whole number of 1 or more, a MACD fast window not below its slow window,
+        or a tolerance not between 0 and 1
+    """
+    name, *windows = indicator
+    if name not in WINDOW_COUNTS:
+        raise ValueError(f"Unknown indicator {name!r}. Expected one of {list(WINDOW_COUNTS)}")
+    if len(windows) != WINDOW_COUNTS[name]:
+        raise ValueError(f"{name} takes {WINDOW_COUNTS[name]} window(s), got {len(windows)}: {indicator!r}")
+    for window in windows:
+        _check_window(window=window, name=f"{name} window")
+    if not 0 < tolerance < 1:
+        raise ValueError(f"Invalid tolerance {tolerance!r}. Expected a number between 0 and 1")
+
+    if name in ("sma", "average_volume"):
+        return windows[0]
+    if name == "volatility":
+        return windows[0] + 1
+    if name == "ema":
+        window = windows[0]
+        return _ema_candles(alpha=2 / (window + 1), window=window, tolerance=tolerance)
+    if name == "rsi":
+        window = windows[0]
+        return _ema_candles(alpha=1 / window, window=window, tolerance=tolerance) + 1
+    fast, slow, signal = windows
+    if fast >= slow:
+        raise ValueError(f"The fast window {fast!r} must be less than the slow window {slow!r}")
+    return _ema_candles(alpha=2 / (slow + 1), window=slow, tolerance=tolerance) + _ema_candles(alpha=2 / (signal + 1), window=signal, tolerance=tolerance) - 1
+
 
 def calculate_sma(candles: pd.DataFrame, window: int) -> pd.Series:
     """Return the simple moving average of each candle's close
