@@ -14,7 +14,8 @@ import re
 from indicators.indicators import (
     _check_window, calculate_sma, calculate_ema, 
     calculate_rsi, calculate_macd, calculate_average_volume,
-    calculate_volatility, calculate_vwap)
+    calculate_volatility, calculate_vwap,
+    candles_needed)
 import pandas as pd
 import pandas.testing as pdt
 
@@ -215,3 +216,46 @@ def test_vwap_keeps_candle_index():
     """Return one value per candle on the candles' index"""
     vwap = calculate_vwap(VWAP_CANDLES)
     assert vwap.index.equals(VWAP_CANDLES.index)
+
+#------candles tests----------
+@pytest.mark.parametrize("indicator, expected", [
+    (("sma", 20), 20),
+    (("average_volume", 10), 10),
+    (("volatility", 20), 21),
+    (("ema", 14), 34),
+    (("ema", 200), 462),
+    (("rsi", 14), 65),
+    (("macd", 12, 26, 9), 82),
+    (("ema", 1), 1),
+])
+
+def test_candles_needed_matches_known_counts(indicator, expected):
+    """Return the known candle count for each indicator at a 1% tolerance"""
+    assert candles_needed(indicator, tolerance=0.01) == expected
+
+def test_candles_needed_never_below_window():
+    """Return at least the window when a loose tolerance needs fewer candles"""
+    assert candles_needed(("ema", 14), tolerance=0.9) == 14
+
+def test_ema_seed_weight_falls_to_tolerance_at_candles_needed():
+    """Match pandas: the seed's weight is within tolerance at the last needed candle, not one before"""
+    needed = candles_needed(("ema", 14), tolerance=0.01)
+    impulse = pd.Series([1.0] + [0.0] * 600)
+
+    seed_weight = impulse.ewm(span=14, adjust=False, min_periods=14).mean()
+
+    assert seed_weight.iloc[needed - 1] <= 0.01
+    assert seed_weight.iloc[needed - 2] > 0.01
+
+@pytest.mark.parametrize("indicator, tolerance", [
+    (("vwap",), 0.01),
+    (("macd", 12), 0.01),
+    (("ema", 0), 0.01),
+    (("macd", 26, 12, 9), 0.01),
+    (("ema", 14), 0),
+    (("ema", 14), 1),
+])
+def test_candles_needed_rejects_bad_input(indicator, tolerance):
+    """Raise ValueError for an unknown name, wrong window count, bad window, fast >= slow or bad tolerance"""
+    with pytest.raises(ValueError):
+        candles_needed(indicator, tolerance=tolerance)
