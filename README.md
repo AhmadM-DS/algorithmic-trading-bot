@@ -15,9 +15,6 @@ every trade and backtest run to an Azure SQL database
 3. **Evaluate strategies** — every ticker in the screener cache is run through
    each strategy on a schedule tied to market hours
    ([src/market_hours.py](src/market_hours.py)):
-   - **MACD** ([src/strategies/macd.py](src/strategies/macd.py))
-   - **RSI** ([src/strategies/rsi.py](src/strategies/rsi.py))
-   - **Moving Average Crossover** ([src/strategies/moving_average.py](src/strategies/moving_average.py))
    - **Momentum** (Warrior Trading style bull flag / flat top breakouts —
      [src/strategies/momentum.py](src/strategies/momentum.py))
    - **ICT Liquidity Sweep** (liquidity sweep, change of character, fair
