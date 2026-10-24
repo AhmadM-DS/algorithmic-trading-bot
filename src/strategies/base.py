@@ -12,7 +12,8 @@ import pandas as pd
 
 #Local Imports
 from strategies.signals import Signal
-from data.time_frames import is_allowed, kind, TIME_FRAMES
+from data.market_calendar import NEW_YORK
+from data.time_frames import is_allowed, kind, to_minutes, TIME_FRAMES
 from config.constants import ENABLED_HOLDING_TYPES, MARKET_OPEN_TIME, MARKET_CLOSE_TIME, SEED_TOLERANCE
 from indicators.indicators import candles_needed
 
@@ -100,12 +101,13 @@ class Strategy(ABC):
                 problems.append(f"Invalid TRADING_WINDOW {self.TRADING_WINDOW!r}. Expected a tuple of time objects with length of 2")
             else:
                 start, end = self.TRADING_WINDOW
+                window = f"{start:%H:%M}-{end:%H:%M}"
                 if self.TIME_FRAME in TIME_FRAMES and kind(self.TIME_FRAME) == "session":
                     problems.append(f"A window cannot apply to invalid kind {kind(self.TIME_FRAME)}")
                 if start >= end:
-                    problems.append(f"Invalid TRADING_WINDOW {self.TRADING_WINDOW!r}. start_time {start!r} cannot be at or after end_time {end!r}")
+                    problems.append(f"Invalid TRADING_WINDOW {window}. start_time {start:%H:%M} cannot be at or after end_time {end:%H:%M}")
                 if start < market_open or end > market_close:
-                    problems.append(f"Invalid TRADING_WINDOW {self.TRADING_WINDOW}. Expected window between ({market_open}-{market_close})")
+                    problems.append(f"Invalid TRADING_WINDOW {window}. Expected window between {market_open:%H:%M}-{market_close:%H:%M}")
         
         if self.TIME_FRAME not in TIME_FRAMES:
             problems.append(f"TIME_FRAME {self.TIME_FRAME!r} is unknown. Expected one of {list(TIME_FRAMES)}")
@@ -115,6 +117,22 @@ class Strategy(ABC):
             problems.append(f"DEFAULT_HOLDING_TYPE {self.DEFAULT_HOLDING_TYPE!r} isn't enabled. Expected one of {ENABLED_HOLDING_TYPES}")
         if problems:
             raise ValueError(f"{type(self).__name__} has invalid settings: " + "; ".join(problems))
+
+    def in_trading_window(self, candles: pd.DataFrame) -> bool:
+        """Check whether the last candle closed inside TRADING_WINDOW
+
+        Parameters:
+            candles (pd.DataFrame): Closed candles, oldest first, timestamps in UTC
+
+        Returns:
+            True if TRADING_WINDOW is None or the last candle closed inside it
+        """
+        if self.TRADING_WINDOW is None:
+            return True
+        start, end = self.TRADING_WINDOW
+        closed_at = candles["timestamp"].iloc[-1] + pd.Timedelta(minutes=to_minutes(self.TIME_FRAME))
+        return start <= closed_at.tz_convert(NEW_YORK).time() <= end
+
     def make_signal(self, ticker: str, side: str, reason: str, entry_price: float, features: dict) -> Signal:
         """Build a Signal from this strategy's settings
 

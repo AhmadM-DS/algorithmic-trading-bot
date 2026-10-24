@@ -49,13 +49,13 @@ def skip_events(conn):
                         "WHERE event_type = 'strategy_skipped' ORDER BY bot_event_id").fetchall()
 
 def test_new_strategy_is_registered_and_can_run(bot_conn):
-    """Register a new strategy (inactive, budget 0) and include it in runnable"""
+    """Register a new strategy (shadow, budget 0) and include it in runnable"""
     runnable, skipped = load_strategies(bot_conn, [RsiStrategy()], DELAYED_PROFILE)
 
     row = get_strategy_rows(bot_conn)["rsi_test"]
 
     assert list(runnable) == ["rsi_test"] and skipped == []
-    assert row["is_active"] is False and row["budget"] == 0
+    assert row["mode"] == "shadow" and row["budget"] == 0
 
 def test_matching_strategy_runs_without_registering_again(bot_conn):
     """Run a strategy whose class matches its row, without a second insert"""
@@ -118,19 +118,34 @@ def test_shared_name_skips_both_classes(bot_conn):
     assert [skip["name"] for skip in skipped] == ["rsi_test", "rsi_test"]
     assert "used by more than one strategy class" in skipped[0]["reason"]
 
-def test_active_row_without_class_is_reported(bot_conn):
-    """Report an active row that no strategy class uses"""
+def test_shared_name_reason_lists_every_class(bot_conn):
+    """Name every class that shares the NAME, so the alert says which classes to fix"""
+    runnable, skipped = load_strategies(bot_conn, [RsiStrategy(), CopiedNameStrategy()], DELAYED_PROFILE)
+
+    assert skipped[0]["reason"] == "NAME 'rsi_test' is used by more than one strategy class (RsiStrategy, CopiedNameStrategy)"
+
+def test_live_row_without_class_is_reported(bot_conn):
+    """Report a live row that no strategy class uses"""
     register_strategy(bot_conn, "deleted_test", "15Min", "day")
-    as_admin(bot_conn, "UPDATE strategies SET is_active = 1 WHERE strategy = 'deleted_test'")
+    as_admin(bot_conn, "UPDATE strategies SET mode = 'live' WHERE strategy = 'deleted_test'")
 
     runnable, skipped = load_strategies(bot_conn, [RsiStrategy()], DELAYED_PROFILE)
 
     assert list(runnable) == ["rsi_test"]
     assert skipped[0]["name"] == "deleted_test"
-    assert "no strategy class has this name" in skipped[0]["reason"]
+    assert skipped[0]["reason"] == "is in live mode in the strategies table but no strategy class has this name"
 
-def test_inactive_rows_without_class_are_ignored(bot_conn):
-    """Leave inactive rows with no class alone (e.g. the manual and unknown seed rows)"""
+def test_shadow_row_without_class_is_reported(bot_conn):
+    """Report a shadow row that no strategy class uses"""
+    register_strategy(bot_conn, "deleted_test", "15Min", "day")
+
+    runnable, skipped = load_strategies(bot_conn, [], DELAYED_PROFILE)
+
+    assert [skip["name"] for skip in skipped] == ["deleted_test"]
+    assert skipped[0]["reason"].startswith("is in shadow mode")
+
+def test_off_rows_without_class_are_ignored(bot_conn):
+    """Leave off rows with no class alone (e.g. the manual and unknown seed rows)"""
     runnable, skipped = load_strategies(bot_conn, [], DELAYED_PROFILE)
 
     assert runnable == {} and skipped == []

@@ -14,8 +14,6 @@ STRATEGY_SKIPPED = "strategy_skipped"
 def compare_with_row(strategy, row: dict) -> list:
     """Return every difference between a strategy's settings and its strategies row
 
-    The bot can't UPDATE strategies, so a difference is fixed by hand (the class or the row).
-
     Parameters:
         strategy (Strategy): A strategy that passed check_settings
         row (dict): Its row from get_strategy_rows
@@ -43,12 +41,6 @@ def _skip(conn, name: str, reason: str, row: dict | None) -> dict:
 def load_strategies(conn, strategies: list, profile: dict) -> tuple:
     """Return the strategies that can run and every one that has to sit out
 
-    For each strategy: check_settings, then register it if it's new (inactive, budget 0),
-    otherwise compare it with its row. Any problem skips only that strategy and saves a
-    strategy_skipped bot event; the bot keeps running the rest. Active rows that no strategy
-    class uses are reported the same way. Doesn't commit; the caller commits and sends
-    skip_alert(skipped) to Discord.
-
     Parameters:
         conn (Connection): An open database connection
         strategies (list): One instance of every strategy class
@@ -56,8 +48,8 @@ def load_strategies(conn, strategies: list, profile: dict) -> tuple:
 
     Returns:
         (runnable, skipped). runnable = {name: strategy} for every strategy that passed,
-        active or not: an inactive strategy still runs its sells, and switching one on needs
-        no restart. skipped = a list of {"name", "reason", "open_positions"}.
+        in any mode: an off strategy still runs its sells, and changing a mode needs no
+        restart. skipped = a list of {"name", "reason", "open_positions"}.
     """
     rows = get_strategy_rows(conn)
     names = [strategy.NAME for strategy in strategies]
@@ -73,11 +65,13 @@ def load_strategies(conn, strategies: list, profile: dict) -> tuple:
             skipped.append(_skip(conn, name, str(error), row))
             continue
         if names.count(name) > 1:
-            skipped.append(_skip(conn, name, f"NAME {name!r} is used by more than one strategy class", row))
+            classes = [type(other).__name__ for other in strategies if other.NAME == name]
+            skipped.append(_skip(conn, name, f"NAME {name!r} is used by more than one strategy class "
+                                             f"({', '.join(classes)})", row))
             continue
         if row is None:
             register_strategy(conn, name, strategy.TIME_FRAME, strategy.DEFAULT_HOLDING_TYPE)
-            health_log.info(f"New strategy {name} registered: switch it on and give it a budget to trade")
+            health_log.info(f"New strategy {name} registered in shadow mode: set it to live and give it a budget to trade")
         else:
             differences = compare_with_row(strategy, row)
             if differences:
@@ -86,8 +80,9 @@ def load_strategies(conn, strategies: list, profile: dict) -> tuple:
         runnable[name] = strategy
 
     for name, row in rows.items():
-        if row["is_active"] and name not in names:
-            skipped.append(_skip(conn, name, "is active in the strategies table but no strategy class has this name", row))
+        if row["mode"] != "off" and name not in names:
+            skipped.append(_skip(conn, name, f"is in {row['mode']} mode in the strategies table "
+                                             "but no strategy class has this name", row))
 
     health_log.info(f"Strategies loaded: {len(runnable)} can run ({sorted(runnable)}), {len(skipped)} skipped")
     return runnable, skipped

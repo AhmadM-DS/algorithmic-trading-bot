@@ -4,6 +4,7 @@ Unit tests for the Strategy base class
 """
 
 #Third Party Libraries
+import pandas as pd
 import pytest
 from datetime import time
 
@@ -110,7 +111,16 @@ class TextLookbackStrategy(CompleteStrategy):
     INDICATORS = [("rsi", 14)]
     LOOKBACK_WINDOW = "100"
 
+class MorningTradingWindowStrategy(CompleteStrategy):
+    """Fake strategy whose window starts after the first candle closes"""
+    TRADING_WINDOW = (time(10, 0), time(11, 30))
+
 DELAYED_PROFILE = {"feed": "sip", "lag_minutes": 15, "min_time_frame_minutes": 15}
+
+def candles_starting_at(*new_york_times):
+    """Build candles that start at the given New York times, stamped in UTC like Alpaca's"""
+    timestamps = [pd.Timestamp(t, tz="America/New_York").tz_convert("UTC") for t in new_york_times]
+    return pd.DataFrame({"timestamp": timestamps})
 
 def test_complete_strategy_passes_check_settings():
     """Accept a strategy that sets every required setting"""
@@ -227,6 +237,13 @@ def test_trading_window_after_close_fails_check_settings():
     with pytest.raises(ValueError, match="Expected window between"):
         strategy.check_settings(DELAYED_PROFILE)
 
+def test_trading_window_error_shows_readable_times():
+    """Write the window and market hours as HH:MM in the error, not as datetime.time objects"""
+    strategy = AfterCloseTradingWindowStrategy()
+
+    with pytest.raises(ValueError, match="Invalid TRADING_WINDOW 09:30-17:00. Expected window between 09:30-16:00"):
+        strategy.check_settings(DELAYED_PROFILE)
+
 def test_trading_window_of_strings_fails_check_settings():
     """Reject an invalid value for TRADING_WINDOW and assert ValueError not TypeError"""
     strategy = InvalidValueTradingWindowStrategy()
@@ -295,3 +312,71 @@ def test_text_lookback_fails_check_settings():
 
     with pytest.raises(ValueError, match="LOOKBACK_WINDOW '100' is invalid"):
         strategy.check_settings(DELAYED_PROFILE)
+
+def test_no_trading_window_is_always_in_window():
+    """Allow buys at any time when TRADING_WINDOW is None"""
+    strategy = CompleteStrategy()
+
+    result = strategy.in_trading_window(candles_starting_at("2026-10-19 15:45"))
+
+    assert result is True
+
+def test_candle_closing_inside_window_is_in_window():
+    """Allow a buy on a candle that closes between the window's start and end"""
+    strategy = ValidTradingWindowStrategy()
+
+    result = strategy.in_trading_window(candles_starting_at("2026-10-19 10:00"))
+
+    assert result is True
+
+def test_candle_closing_at_window_start_is_in_window():
+    """Count a candle that closes exactly at the window's start (09:30 candle closes 09:45)"""
+    strategy = ValidTradingWindowStrategy()
+
+    result = strategy.in_trading_window(candles_starting_at("2026-10-19 09:30"))
+
+    assert result is True
+
+def test_candle_closing_at_window_end_is_in_window():
+    """Count a candle that closes exactly at the window's end (14:00 candle closes 14:15)"""
+    strategy = ValidTradingWindowStrategy()
+
+    result = strategy.in_trading_window(candles_starting_at("2026-10-19 14:00"))
+
+    assert result is True
+
+def test_candle_starting_at_window_end_is_outside_window():
+    """Judge by close time: a candle that starts at 14:15 closes at 14:30, after the window"""
+    strategy = ValidTradingWindowStrategy()
+
+    result = strategy.in_trading_window(candles_starting_at("2026-10-19 14:15"))
+
+    assert result is False
+
+def test_candle_closing_before_window_is_outside_window():
+    """Block a buy on a candle that closes before the window starts"""
+    strategy = MorningTradingWindowStrategy()
+
+    result = strategy.in_trading_window(candles_starting_at("2026-10-19 09:30"))
+
+    assert result is False
+
+def test_only_last_candle_decides_window():
+    """Judge only the newest candle, even when earlier ones closed inside the window"""
+    strategy = ValidTradingWindowStrategy()
+
+    result = strategy.in_trading_window(candles_starting_at("2026-10-19 10:00", "2026-10-19 14:15"))
+
+    assert result is False
+
+def test_window_uses_new_york_time_across_daylight_saving():
+    """Convert UTC to New York time, so the same UTC time is inside in July and outside in December"""
+    strategy = ValidTradingWindowStrategy()
+    july = pd.DataFrame({"timestamp": [pd.Timestamp("2026-07-15 13:45", tz="UTC")]})
+    december = pd.DataFrame({"timestamp": [pd.Timestamp("2026-12-15 13:45", tz="UTC")]})
+
+    in_july = strategy.in_trading_window(july)
+    in_december = strategy.in_trading_window(december)
+
+    assert in_july is True
+    assert in_december is False

@@ -6,6 +6,10 @@ Integration tests for storage/strategies.py and storage/events.py against noctis
 #Standard Library
 from datetime import date, datetime
 
+#Third Party Libraries
+import pyodbc
+import pytest
+
 #Local Imports
 from storage.events import insert_bot_event
 from storage.strategies import count_open_positions, get_active_strategies, get_strategy_rows, register_strategy
@@ -24,14 +28,14 @@ def open_position(conn, strategy_id):
                  "avg_entry_price, strategy_id, ticker_id) VALUES ('15Min', 'day', ?, 'open', 10, 100, ?, ?)",
                  (datetime(2026, 10, 19, 14, 0), strategy_id, ticker_id))
 
-def test_new_strategy_is_inactive_with_no_budget(bot_conn):
-    """Register a new strategy switched off and unfunded"""
+def test_new_strategy_is_shadow_with_no_budget(bot_conn):
+    """Register a new strategy in shadow mode and unfunded"""
     inserted = register_strategy(bot_conn, "rsi_reversal", "15Min", "day")
 
     row = get_strategy_rows(bot_conn)["rsi_reversal"]
 
     assert inserted is True
-    assert row["is_active"] is False
+    assert row["mode"] == "shadow"
     assert row["budget"] == 0
     assert row["time_frame"] == "15Min" and row["default_holding_type"] == "day"
 
@@ -44,23 +48,38 @@ def test_registering_twice_keeps_one_row(bot_conn):
     assert inserted is False
     assert get_strategy_rows(bot_conn)["rsi_reversal"]["time_frame"] == "15Min"
 
-def test_strategy_rows_include_inactive_rows(bot_conn):
-    """Return every row, including the inactive manual and unknown seed rows"""
+def test_strategy_rows_include_off_rows(bot_conn):
+    """Return every row, including the off manual and unknown seed rows"""
     register_strategy(bot_conn, "rsi_reversal", "15Min", "day")
 
     rows = get_strategy_rows(bot_conn)
 
     assert {"manual", "unknown", "rsi_reversal"} <= set(rows)
 
-def test_active_strategies_only_returns_switched_on_rows(bot_conn):
-    """Return only rows the admin set to is_active = 1"""
+def test_seed_rows_are_off(bot_conn):
+    """Turn the manual and unknown seed rows into off rows in migration 004"""
+    rows = get_strategy_rows(bot_conn)
+
+    assert rows["manual"]["mode"] == "off" and rows["unknown"]["mode"] == "off"
+
+def test_unknown_mode_is_rejected(bot_conn):
+    """Reject a mode that isn't off, shadow or live"""
+    register_strategy(bot_conn, "rsi_reversal", "15Min", "day")
+
+    with pytest.raises(pyodbc.IntegrityError, match="ck_strategies_mode"):
+        as_admin(bot_conn, "UPDATE strategies SET mode = 'paused' WHERE strategy = 'rsi_reversal'")
+
+def test_active_strategies_return_shadow_and_live_rows(bot_conn):
+    """Return shadow and live rows with their mode and budget, and leave off rows out"""
     register_strategy(bot_conn, "rsi_reversal", "15Min", "day")
     register_strategy(bot_conn, "ema_cross", "15Min", "day")
-    as_admin(bot_conn, "UPDATE strategies SET is_active = 1, budget = 5000 WHERE strategy = 'ema_cross'")
+    register_strategy(bot_conn, "vwap_bounce", "15Min", "day")
+    as_admin(bot_conn, "UPDATE strategies SET mode = 'live', budget = 5000 WHERE strategy = 'ema_cross'")
+    as_admin(bot_conn, "UPDATE strategies SET mode = 'off' WHERE strategy = 'vwap_bounce'")
 
     active = get_active_strategies(bot_conn)
 
-    assert [row["strategy"] for row in active] == ["ema_cross"]
+    assert [(row["strategy"], row["mode"]) for row in active] == [("ema_cross", "live"), ("rsi_reversal", "shadow")]
     assert active[0]["budget"] == 5000
 
 def test_open_positions_are_counted_per_strategy(bot_conn):

@@ -5,7 +5,7 @@ Pipline that runs the bot on schedule.
 
 #TODO AS WE REFACTOR MAIN.PY, REMOVE OLD IMPORTS
 from config.settings import load_env_vars
-from config.constants import MAX_TICKERS, UNATTENDED_UPGRADES_LOG_PATH, MARKET_OPEN_TIME, CLOSING_STATUS_TIME, DISCORD_MENTION
+from config.constants import MAX_TICKERS, UNATTENDED_UPGRADES_LOG_PATH, MARKET_OPEN_TIME, CLOSING_STATUS_TIME, DISCORD_MENTION, DEFAULT_FILTERS
 from alpaca_client import create_alpaca_trading_client, create_alpaca_shd_client
 from market_data import get_latest_price
 from alpaca.common.exceptions import APIError
@@ -24,10 +24,6 @@ import schedule
 from db import get_connection, update_heartbeat, insert_trade, get_inactive_tickers, mark_ticker_inactive
 from trader import place_market_order, has_position, sync_order_statuses, size_position, reconcile_bracket_exits
 from screener import get_tickers
-from cleaner import load_ticker_data
-from strategies.base_strategy import Strategy
-from strategies.momentum import Momentum
-from strategies.ict import ICT
 from market_hours import is_market_open, is_weekend, market_time_slots
 from notifications import send_critical, send_routine, send_trades
 from risk import DailyRiskState
@@ -42,7 +38,6 @@ risk_state = DailyRiskState()
 market_open_today = False
 market_closed_logged = False
 ticker_cache_empty = False
-ict_only_today = False
 
 
 
@@ -109,7 +104,7 @@ def refresh_screener():
         return
     ticker_cache_empty = False
     risk_state.reset_daily_state()
-    screened = [t for t in get_tickers(Strategy.filters) if t not in inactive_tickers]
+    screened = [t for t in get_tickers(DEFAULT_FILTERS) if t not in inactive_tickers]
     tickers_cache = screened[:MAX_TICKERS]
     logger.info(f"Screener refreshed. {len(tickers_cache)} tickers found.")
     send_routine(f"Screener refreshed. Adding the following tickers: {tickers_cache}")
@@ -167,49 +162,20 @@ def evaluate_and_trade(strategy, ticker, account, risk_state, conn):
         logger.warning(f"Could not get price of {ticker}, skipping.")
     return account
 
-def trade_ICT():
-    ticker = 'SPY'
-    with get_connection() as conn:
-        reconcile_bracket_exits(trading_client, conn, risk_state)
-        df = load_ticker_data(ticker)
-        strategy = ICT("ICT", df=df, ticker=ticker, initial_capital=10000)
-        account = trading_client.get_account()
-        account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
-        sync_order_statuses(trading_client, conn)
-
 def run():
-    global market_closed_logged, ticker_cache_empty, ict_only_today
+    global market_closed_logged, ticker_cache_empty
     try:
         if is_market_open(trading_client):
             market_closed_logged = False
             if not tickers_cache:
                 if not ticker_cache_empty:
                     send_critical(f"No tickers in cache for initial run. {DISCORD_MENTION}")
-                    logger.info("No tickers in cache for initial run, switching to plan B.")
+                    logger.info("No tickers in cache for initial run.")
                     ticker_cache_empty = True
-                if not ict_only_today:
-                    send_critical(f"Only trading ICT on SPY today. {DISCORD_MENTION}")
-                    logger.info("Only trading ICT on SPY today.")
-                    ict_only_today = True
-                trade_ICT()
                 return
             run_started = time.monotonic()
-            account = trading_client.get_account()
             with get_connection() as conn:
                 reconcile_bracket_exits(trading_client, conn, risk_state)
-                for ticker in tickers_cache:
-                    if ticker in inactive_tickers:
-                        continue
-                    df = load_ticker_data(ticker)
-                    if df is None:
-                        continue
-
-                    strategies = [
-                        Momentum("Momentum", df=df, ticker=ticker, initial_capital=10000),
-                        ICT("ICT", df=df, ticker=ticker, initial_capital=10000)
-                    ]
-                    for strategy in strategies:
-                        account = evaluate_and_trade(strategy, ticker, account, risk_state, conn)
                 sync_order_statuses(trading_client, conn)
             elapsed = time.monotonic() - run_started
             logger.info(f"run() completed in {elapsed:.1f}s for {len(tickers_cache)} tickers.")

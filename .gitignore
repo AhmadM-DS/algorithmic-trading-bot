@@ -213,7 +213,3 @@ docs/
 
 #Personal scripts
 scripts/
-
-# Generated market data CSVs (regenerated from yfinance, not source)
-data/raw/
-data/cleaned/
