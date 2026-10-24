@@ -29,17 +29,3 @@ def market_time_slots(start=MARKET_OPEN_TIME, end="16:00", interval=TRADING_INTE
         slots.append(current.strftime("%H:%M"))
         current += timedelta(minutes=interval)
     return slots
-
-def is_within_window(start_time, end_time):
-    """
-    Check if the current time falls within
-    [start_time, end_time].
-
-    Parameters:
-        start_time (str): Window start, "HH:MM".
-        end_time (str): Window end, "HH:MM".
-    """
-    now = datetime.now(MARKET_TZ).time()
-    start = datetime.strptime(start_time, "%H:%M").time()
-    end = datetime.strptime(end_time, "%H:%M").time()
-    return start <= now <= end

@@ -15,6 +15,7 @@ SQL_DIR = Path(__file__).parent.parent.parent / "sql"
 BUILD_FILES = [SQL_DIR / "migrations" / "001_initial_schema.sql",
                SQL_DIR / "migrations" / "002_roles.sql",
                SQL_DIR / "migrations" / "003_ticker_fill_override.sql",
+               SQL_DIR / "migrations" / "004_strategy_mode.sql",
                SQL_DIR / "views.sql"]
 
 # Never read from .env: this database gets dropped on every run.

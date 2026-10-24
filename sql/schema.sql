@@ -11,11 +11,12 @@ CREATE TABLE strategies
     default_holding_type NVARCHAR(10)  NOT NULL,
     budget               DECIMAL(19,4) NOT NULL,
     updated_at           DATETIME2     NOT NULL CONSTRAINT df_strategies_updated_at DEFAULT SYSUTCDATETIME(),
-    is_active            BIT           NOT NULL CONSTRAINT df_strategies_is_active DEFAULT 1,
+    mode                 NVARCHAR(10)  NOT NULL,
     CONSTRAINT pk_strategies PRIMARY KEY (strategy_id),
     CONSTRAINT uq_strategies_strategy UNIQUE (strategy),
     CONSTRAINT ck_strategies_default_holding_type CHECK (default_holding_type IN ('day', 'swing')),
-    CONSTRAINT ck_strategies_budget CHECK (budget >= 0)
+    CONSTRAINT ck_strategies_budget CHECK (budget >= 0),
+    CONSTRAINT ck_strategies_mode CHECK (mode IN ('off', 'shadow', 'live'))
 );
 GO
 
@@ -391,8 +392,8 @@ CREATE INDEX ix_health_status_recorded_at ON health_status (recorded_at);
 GO
 
 -- 'swing' so the end-of-day job never closes a position the bot didn't open.
-INSERT INTO strategies (strategy, time_frame, default_holding_type, budget, is_active)
+INSERT INTO strategies (strategy, time_frame, default_holding_type, budget, mode)
 VALUES
-    ('manual',  'none', 'swing', 0, 0),
-    ('unknown', 'none', 'swing', 0, 0);
+    ('manual',  'none', 'swing', 0, 'off'),
+    ('unknown', 'none', 'swing', 0, 'off');
 GO
