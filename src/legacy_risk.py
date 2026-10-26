@@ -1,6 +1,6 @@
 """
-risk.py
-Handles the risk management logic.
+legacy_risk.py
+Old risk management logic, kept until the main.py rewrite replaces it with the risk package.
 """
 
 from config.constants import DEFAULT_LOSS_LIMIT, DEFAULT_PROFIT_TARGET

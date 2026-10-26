@@ -26,7 +26,7 @@ from trader import place_market_order, has_position, sync_order_statuses, size_p
 from screener import get_tickers
 from market_hours import is_market_open, is_weekend, market_time_slots
 from notifications import send_critical, send_routine, send_trades
-from risk import DailyRiskState
+from legacy_risk import DailyRiskState
 from logger import legacy_log as logger
 
 
