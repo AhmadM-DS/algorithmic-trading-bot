@@ -39,7 +39,7 @@ RATE_LIMIT_ALERT_COOLDOWN_SECONDS = 300
 MARKET_DATA_PLAN = "delayed"
 MARKET_DATA_PROFILES = {
     "delayed": {"feed": "sip", "lag_minutes": 15, "min_time_frame_minutes": 15},
-    "live":    {"feed": "sip", "lag_minutes": 0,  "min_time_frame_minutes": 1},
+    "live": {"feed": "sip", "lag_minutes": 0,  "min_time_frame_minutes": 1},
 }
 PRICE_ADJUSTMENT = "split"
 SEED_TOLERANCE = 0.01
@@ -55,3 +55,18 @@ DATA_HEALTH_THRESHOLDS = {
 
 MIN_TRADES_FOR_POPULAR = 3
 SCREENER_SOURCE = "biggest-gainers"
+
+RISK_PARAMETERS = {
+    "position_fraction": {"provider": "static", "value": 0.20, "min": 0.05, "max": 0.25, "max_daily_change": 0.05},
+    "drawdown_limit": {"provider": "static", "value": 0.05, "min": 0.03, "max": 0.10, "max_daily_change": 0.01},
+    "cooldown_stop_loss": {"provider": "static", "value": 2, "min": 0, "max": 8, "max_daily_change": 2},
+    "cooldown_signal": {"provider": "static", "value": 0, "min": 0, "max": 8, "max_daily_change": 2},
+    "cooldown_take_profit": {"provider": "static", "value": 0, "min": 0, "max": 8, "max_daily_change": 2},
+}
+POSITION_SIZER = "fixed_budget"
+SHADOW_BUDGET = 250
+MAX_LEVERAGE = 1.0
+MAX_OPEN_POSITIONS = 10
+MAX_POSITIONS_PER_TICKER = 2
+MAX_TICKER_FRACTION = 0.15
+MAX_ORDER_FRACTION = 0.20
