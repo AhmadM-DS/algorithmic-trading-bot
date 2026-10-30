@@ -229,11 +229,13 @@ CREATE TABLE orders
     ticker_id          INT           NOT NULL,
     signal_id          INT           NULL,
     position_id        INT           NULL,
+    parent_order_id    INT           NULL,
     CONSTRAINT pk_orders PRIMARY KEY (order_id),
-    CONSTRAINT fk_orders_strategy_id FOREIGN KEY (strategy_id) REFERENCES strategies (strategy_id),
-    CONSTRAINT fk_orders_ticker_id   FOREIGN KEY (ticker_id)   REFERENCES tickers (ticker_id),
-    CONSTRAINT fk_orders_signal_id   FOREIGN KEY (signal_id)   REFERENCES signals (signal_id),
-    CONSTRAINT fk_orders_position_id FOREIGN KEY (position_id) REFERENCES positions (position_id),
+    CONSTRAINT fk_orders_strategy_id     FOREIGN KEY (strategy_id)     REFERENCES strategies (strategy_id),
+    CONSTRAINT fk_orders_ticker_id       FOREIGN KEY (ticker_id)       REFERENCES tickers (ticker_id),
+    CONSTRAINT fk_orders_signal_id       FOREIGN KEY (signal_id)       REFERENCES signals (signal_id),
+    CONSTRAINT fk_orders_position_id     FOREIGN KEY (position_id)     REFERENCES positions (position_id),
+    CONSTRAINT fk_orders_parent_order_id FOREIGN KEY (parent_order_id) REFERENCES orders (order_id),
     CONSTRAINT uq_orders_client_order_id UNIQUE (client_order_id),
     CONSTRAINT ck_orders_side CHECK (side IN ('buy', 'sell')),
     CONSTRAINT ck_orders_requested_quantity CHECK (requested_quantity > 0),
@@ -247,6 +249,7 @@ CREATE INDEX ix_orders_ticker_id ON orders (ticker_id);
 CREATE INDEX ix_orders_signal_id ON orders (signal_id);
 CREATE INDEX ix_orders_position_id ON orders (position_id);
 CREATE INDEX ix_orders_submitted_at ON orders (submitted_at);
+CREATE INDEX ix_orders_parent_order_id ON orders (parent_order_id);
 GO
 
 CREATE TABLE trades
@@ -487,7 +490,8 @@ VALUES
     (13, 'cooldown',                 'Still waiting after the last exit',           130),
     (14, 'zero_quantity',            'One share costs more than the slice',         140),
     (15, 'max_order_size',           'Single order too large (likely a bug)',       150),
-    (16, 'nothing_to_sell',          'Sell with no shares held',                    500);
+    (16, 'nothing_to_sell',          'Sell with no shares held',                    500),
+    (17, 'invalid_exit_prices',      'Stop or target on the wrong side of the price', 160);
 GO
 
 CREATE TRIGGER trg_strategies_budget_set_at ON strategies
