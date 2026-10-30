@@ -15,8 +15,9 @@ from storage.watchlist import get_or_create_ticker
 
 AGREED_PRIORITY = ["shadow", "strategy_off", "kill_switch", "audit_mismatch", "drawdown_limit", "daily_halt",
                    "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",
-                   "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "nothing_to_sell"]
-"""Every skip code in the priority order agreed in the R1 decisions"""
+                   "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "invalid_exit_prices",
+                   "nothing_to_sell"]
+"""Every skip code in the priority order agreed in the R1 and E1 decisions"""
 
 def as_admin(conn, sql, params=()):
     """Run one statement as the admin (the bot can't change strategies), then switch back to the bot"""

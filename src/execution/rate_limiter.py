@@ -7,6 +7,7 @@ Controls the total Alpaca API calls per minute to avoid hitting the rate limit
 from collections import deque
 import time
 from config.constants import (
+    ALPACA_TIMEOUT_SECONDS,
     MAX_CALLS,
     WINDOW_SECONDS,
     RATE_LIMIT_ALERT_THRESHOLD,
@@ -39,6 +40,7 @@ class RateLimitedSession(requests.Session):
         self.last_alert = None
 
     def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", ALPACA_TIMEOUT_SECONDS)
         self.limiter.wait()
         response = super().request(*args, **kwargs)
         api_log.info(f"{response.request.method} {response.url} "
