@@ -9,9 +9,9 @@ from datetime import datetime, timezone
 #Local Imports
 from risk.context import OpenPosition, RecentExit, RiskContext, StrategyState
 from risk.decisions import RiskRequest
-from risk.guardrails import (check_budget, check_buying_power, check_leverage, check_max_positions, check_mode,
-                             check_cooldown, check_order_size, check_positions_per_ticker, check_quantity,
-                             check_ticker_exposure)
+from risk.guardrails import (check_budget, check_buying_power, check_daily_halt, check_drawdown, check_kill_switch,
+                             check_leverage, check_max_positions, check_mode, check_cooldown, check_order_size,
+                             check_positions_per_ticker, check_quantity, check_ticker_exposure, cooldown_parameter)
 from strategies.signals import Signal
 
 LIVE = 3
@@ -39,10 +39,14 @@ def _buy(ticker="AAPL", strategy_id=LIVE, time_frame="15Min"):
                     reason="test", strategy_version="1.0.0", ticker=ticker, features={})
     return RiskRequest(signal=signal, strategy_id=strategy_id, price=10.0)
 
-def _context(positions=(), buying_power=1000.0, exits=()):
+def _context(positions=(), buying_power=1000.0, exits=(), strategies=STRATEGIES, **halts):
     """Build a snapshot holding these open positions"""
-    return RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=buying_power, strategies=STRATEGIES,
-                       open_positions=tuple(positions), recent_exits=tuple(exits), broker_positions=())
+    return RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=buying_power, strategies=strategies,
+                       open_positions=tuple(positions), recent_exits=tuple(exits), broker_positions=(), **halts)
+
+def _live(**state):
+    """Return the strategies with the live one changed, e.g. halted"""
+    return (StrategyState(strategy_id=LIVE, mode="live", effective_budget=250.0, **state),) + STRATEGIES[1:]
 
 def _positions(count, strategy_id, ticker):
     """Build count open positions of one share each for one strategy and ticker"""
@@ -330,3 +334,60 @@ def test_other_strategy_exit_does_not_cool_down():
     reason = check_cooldown(_buy(), context, 5)
 
     assert reason is None
+
+def test_kill_switch_blocks_every_buy():
+    """Block a buy with "kill_switch" while the account's kill switch is on"""
+
+    reason = check_kill_switch(_buy(), _context(kill_switch=True), 5)
+
+    assert reason == "kill_switch"
+
+def test_kill_switch_off_passes():
+    """Let a buy through on a normal day"""
+
+    reason = check_kill_switch(_buy(), _context(), 5)
+
+    assert reason is None
+
+def test_drawdown_pause_blocks_the_strategy():
+    """Block a paused strategy's buy with "drawdown_limit" """
+
+    reason = check_drawdown(_buy(), _context(strategies=_live(drawdown_paused=True)), 5)
+
+    assert reason == "drawdown_limit"
+
+def test_strategy_without_drawdown_pause_passes():
+    """Let a strategy that isn't paused buy"""
+
+    reason = check_drawdown(_buy(), _context(), 5)
+
+    assert reason is None
+
+def test_daily_halt_blocks_its_holding_type():
+    """Block a day buy from a strategy halted for day trades today"""
+
+    reason = check_daily_halt(_buy(), _context(strategies=_live(halted_holding_types=frozenset({"day"}))), 5)
+
+    assert reason == "daily_halt"
+
+def test_daily_halt_of_another_holding_type_passes():
+    """Let a day buy through when only swing trades are halted"""
+
+    reason = check_daily_halt(_buy(), _context(strategies=_live(halted_holding_types=frozenset({"swing"}))), 5)
+
+    assert reason is None
+
+def test_cooldown_parameter_is_rate_limited_from_previous():
+    """Pass yesterday's value to the bounds: a static 2 candles against yesterday's 5 moves at most 2, to 3"""
+    context = _context(exits=[_exit("stop_loss", 14, 0)], previous_parameters={(LIVE, "cooldown_stop_loss"): 5})
+
+    parameter = cooldown_parameter(_buy(), context)
+
+    assert (parameter.used, parameter.limited_by) == (3, ("rate_limit",))
+
+def test_no_cooldown_parameter_without_an_exit():
+    """Return no cooldown parameter when the strategy hasn't exited the ticker today"""
+
+    parameter = cooldown_parameter(_buy(), _context())
+
+    assert parameter is None

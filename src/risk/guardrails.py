@@ -10,7 +10,7 @@ from config.constants import (
     MAX_OPEN_POSITIONS, MAX_POSITIONS_PER_TICKER,
     MAX_LEVERAGE, MAX_ORDER_FRACTION,
     MAX_TICKER_FRACTION, RISK_PARAMETERS)
-from risk.context import RiskContext
+from risk.context import ParameterValue, RiskContext
 from risk.decisions import RiskRequest
 from data.time_frames import to_minutes
 from risk.parameters import get_parameter
@@ -32,6 +32,46 @@ def check_mode(request: RiskRequest, context: RiskContext, quantity: int) -> str
     if mode == "off":
         return "strategy_off"
     return None
+
+def check_kill_switch(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
+    """Block every buy while the account's kill switch is on today
+
+    Parameters:
+        request (RiskRequest): The buy being checked
+        context (RiskContext): This cycle's snapshot
+        quantity (int): The sizer's share count
+
+    Returns:
+        "kill_switch" if it's on, None otherwise
+    """
+    return "kill_switch" if context.kill_switch else None
+
+def check_drawdown(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
+    """Block a strategy's buys once it has fallen its drawdown limit below its peak, until the admin re-sets its budget
+
+    Parameters:
+        request (RiskRequest): The buy being checked
+        context (RiskContext): This cycle's snapshot
+        quantity (int): The sizer's share count
+
+    Returns:
+        "drawdown_limit" if the strategy is paused, None otherwise
+    """
+    return "drawdown_limit" if context.strategy(request.strategy_id).drawdown_paused else None
+
+def check_daily_halt(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
+    """Block a strategy's buys of a holding type it hit today's limit for
+
+    Parameters:
+        request (RiskRequest): The buy being checked
+        context (RiskContext): This cycle's snapshot
+        quantity (int): The sizer's share count
+
+    Returns:
+        "daily_halt" if this strategy is halted for the signal's holding type today, None otherwise
+    """
+    halted = context.strategy(request.strategy_id).halted_holding_types
+    return "daily_halt" if request.signal.holding_type in halted else None
 
 def check_quantity(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
     """Block a buy the sizer couldn't afford a single share of
@@ -148,11 +188,30 @@ def check_budget(request: RiskRequest, context: RiskContext, quantity: int) -> s
     after = context.exposure(strategy_id=request.strategy_id) + _order_dollars(request, quantity)
     return "budget_exhausted" if after > budget else None
 
+def cooldown_parameter(request: RiskRequest, context: RiskContext) -> ParameterValue | None:
+    """Return the cooldown parameter for this strategy's last exit from the ticker today, if one applies
+
+    Exit reasons with no cooldown_<reason> parameter (end_of_day, kill_switch, manual, liquidation) have no cooldown.
+
+    Parameters:
+        request (RiskRequest): The buy being checked
+        context (RiskContext): This cycle's snapshot
+
+    Returns:
+        The ParameterValue (a number of candles), or None if there's no exit or no cooldown for its reason
+    """
+    last = context.last_exit(request.strategy_id, request.signal.ticker)
+    if last is None:
+        return None
+    name = f"cooldown_{last.exit_reason}"
+    if name not in RISK_PARAMETERS:
+        return None
+    return get_parameter(name, request.strategy_id, context, context.previous(request.strategy_id, name))
+
 def check_cooldown(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
     """Block a buy while this strategy is cooling down after its last exit from the ticker
 
-    The wait is a number of the strategy's candles, set per exit reason by the cooldown_<reason> parameters.
-    Exit reasons with no parameter (end_of_day, kill_switch, manual, liquidation) have no cooldown.
+    The wait is cooldown_parameter's number of the strategy's candles after the exit.
 
     Parameters:
         request (RiskRequest): The buy being checked
@@ -162,14 +221,9 @@ def check_cooldown(request: RiskRequest, context: RiskContext, quantity: int) ->
     Returns:
         "cooldown" if the wait isn't over yet, None otherwise
     """
+    parameter = cooldown_parameter(request, context)
+    if parameter is None:
+        return None
     last = context.last_exit(request.strategy_id, request.signal.ticker)
-    if last is None:
-        return None
-
-    name = f"cooldown_{last.exit_reason}"
-    if name not in RISK_PARAMETERS:
-        return None
-
-    candles = get_parameter(name, request.strategy_id, context).used
-    wait = timedelta(minutes=candles * to_minutes(request.signal.time_frame))
+    wait = timedelta(minutes=parameter.used * to_minutes(request.signal.time_frame))
     return "cooldown" if context.as_of < last.closed_at + wait else None

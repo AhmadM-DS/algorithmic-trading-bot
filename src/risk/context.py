@@ -4,7 +4,7 @@ Hold the RiskContext snapshot: everything risk knows about the account at one mo
 """
 
 #Standard Library
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 #Local Imports
@@ -13,11 +13,43 @@ from config.constants import SHADOW_BUDGET
 STRATEGY_MODES = ("off", "shadow", "live")
 
 @dataclass(frozen=True)
+class ParameterValue:
+    """One parameter as proposed by its provider and as actually used after the bounds"""
+    name: str
+    provider: str
+    proposed: float
+    used: float
+    limited_by: tuple[str, ...]
+
+@dataclass(frozen=True)
+class RiskEvent:
+    """A risk state that started this cycle (or stopped, for states that don't lock), to save and alert once
+
+    channel is "critical" or "trades"; strategy_id is None for an account-wide state.
+    """
+    event_type: str
+    strategy_id: int | None
+    channel: str
+    message: str
+
+@dataclass(frozen=True)
 class StrategyState:
-    """One running strategy's mode and the budget risk may use this cycle"""
+    """One strategy's mode, the budget risk may use this cycle, and the halts it's under
+
+    daily_pnl is today's realized P/L per holding type. drawdown is how far the realized P/L since the budget
+    was set is below its peak (0 or more). drawdown_limit is the parameter the drawdown was checked against,
+    saved with each decision.
+    """
     strategy_id: int
     mode: str
     effective_budget: float
+    name: str = ""
+    budget: float = 0.0
+    daily_pnl: dict = field(default_factory=dict)
+    drawdown: float = 0.0
+    halted_holding_types: frozenset = frozenset()
+    drawdown_paused: bool = False
+    drawdown_limit: ParameterValue | None = None
 
     def __post_init__(self):
         """Reject an unknown mode or a negative budget"""
@@ -30,6 +62,17 @@ class StrategyState:
     def trading_budget(self) -> float:
         """Return the budget this strategy sizes and checks against: SHADOW_BUDGET in shadow, else effective_budget"""
         return SHADOW_BUDGET if self.mode == "shadow" else self.effective_budget
+
+    def pnl_today(self, holding_type: str) -> float:
+        """Return today's realized P/L for one holding type, 0 if nothing of that type closed today
+
+        Parameters:
+            holding_type (str): "day" or "swing"
+
+        Returns:
+            The P/L in dollars
+        """
+        return self.daily_pnl.get(holding_type, 0.0)
 
 @dataclass(frozen=True)
 class OpenPosition:
@@ -62,7 +105,13 @@ class BrokerPosition:
 
 @dataclass(frozen=True)
 class RiskContext:
-    """Everything risk knows at one moment, built once per cycle outside risk"""
+    """Everything risk knows at one moment, built once per cycle outside risk
+
+    equity is capped by RISK_EQUITY_CAP. account_daily_change is Alpaca's equity minus last_equity (uncapped
+    dollars); start_equity is the capped last_equity, the kill switch's base. scale_down is the factor every
+    live budget was multiplied by (1.0 when the account covers them). previous_parameters holds the last value
+    used before today for each (strategy_id, name). events are the states that started this cycle.
+    """
     as_of: datetime
     equity: float
     buying_power: float
@@ -70,6 +119,12 @@ class RiskContext:
     open_positions: tuple[OpenPosition, ...]
     recent_exits: tuple[RecentExit, ...]
     broker_positions: tuple[BrokerPosition, ...]
+    account_daily_change: float = 0.0
+    start_equity: float = 0.0
+    kill_switch: bool = False
+    scale_down: float = 1.0
+    previous_parameters: dict = field(default_factory=dict)
+    events: tuple[RiskEvent, ...] = ()
 
     def __post_init__(self):
         """Reject a naive as_of time"""
@@ -145,6 +200,18 @@ class RiskContext:
         """
         held = next((b for b in self.broker_positions if b.ticker == ticker), None)
         return 0 if held is None else held.shares
+
+    def previous(self, strategy_id: int, name: str) -> float | None:
+        """Return the value a strategy last used for a parameter before today, for the rate limit
+
+        Parameters:
+            strategy_id (int): The strategy
+            name (str): A key in RISK_PARAMETERS
+
+        Returns:
+            The value, or None if it never used it before today
+        """
+        return self.previous_parameters.get((strategy_id, name))
 
     def last_exit(self, strategy_id: int, ticker: str) -> RecentExit | None:
         """Return a strategy's most recent exit from a ticker today

@@ -4,22 +4,12 @@ Get tunable risk parameters from their provider and keep them inside their bound
 """
 
 #Standard Library
-from dataclasses import dataclass
 import math
 
 #Local Imports
 from config.constants import RISK_PARAMETERS
-from risk.context import RiskContext
+from risk.context import ParameterValue, RiskContext
 from logger import health_log
-
-@dataclass(frozen=True)
-class ParameterValue:
-    """One parameter as proposed by its provider and as actually used after the bounds"""
-    name: str
-    provider: str
-    proposed: float
-    used: float
-    limited_by: tuple[str, ...]
 
 def apply_bounds(name: str, proposed: float, previous: float | None) -> tuple[float, tuple[str, ...]]:
     """Clamp a proposed value to its min and max, then limit how far it moved from the previous value

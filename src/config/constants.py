@@ -66,7 +66,7 @@ SCREENER_SOURCE = "biggest-gainers"
 
 RISK_PARAMETERS = {
     "position_fraction": {"provider": "static", "value": 0.20, "min": 0.05, "max": 0.25, "max_daily_change": 0.05},
-    "drawdown_limit": {"provider": "static", "value": 0.05, "min": 0.03, "max": 0.10, "max_daily_change": 0.01},
+    "drawdown_limit": {"provider": "static", "value": 0.05, "min": 0.04, "max": 0.10, "max_daily_change": 0.01},
     "cooldown_stop_loss": {"provider": "static", "value": 2, "min": 0, "max": 8, "max_daily_change": 2},
     "cooldown_signal": {"provider": "static", "value": 0, "min": 0, "max": 8, "max_daily_change": 2},
     "cooldown_take_profit": {"provider": "static", "value": 0, "min": 0, "max": 8, "max_daily_change": 2},
@@ -78,3 +78,6 @@ MAX_OPEN_POSITIONS = 10
 MAX_POSITIONS_PER_TICKER = 2
 MAX_TICKER_FRACTION = 0.15
 MAX_ORDER_FRACTION = 0.20
+DAILY_HALT_LIMITS = {"day": {"loss": 0.03, "profit": 0.10}}
+KILL_SWITCH_FRACTION = 0.05
+RISK_EQUITY_CAP = {"PAPER": 1000, "LIVE": None}

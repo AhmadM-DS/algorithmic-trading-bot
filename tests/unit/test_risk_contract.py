@@ -194,3 +194,26 @@ def test_holding_type_without_rules_raises():
 
     with pytest.raises(ValueError, match="No guardrails for holding type"):
         decide(_request(holding_type="swing"), _context())
+
+def test_kill_switch_skips_buys():
+    """Skip every buy while the kill switch is on"""
+    context = _context()
+    halted = RiskContext(as_of=context.as_of, equity=context.equity, buying_power=context.buying_power,
+                         strategies=context.strategies, open_positions=(), recent_exits=(), broker_positions=(),
+                         kill_switch=True)
+
+    decision = decide(_request(), halted)
+
+    assert decision.skip_reason == "kill_switch"
+
+def test_halts_never_block_a_sell():
+    """Sell during a kill switch, a daily halt and a drawdown pause: halts never trap a position"""
+    halted_state = StrategyState(strategy_id=LIVE, mode="live", effective_budget=250.0, drawdown_paused=True,
+                                 halted_holding_types=frozenset({"day"}))
+    context = RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=1000.0, strategies=(halted_state,),
+                          open_positions=(_held(LIVE, "AAPL", 5, 10.0),), recent_exits=(),
+                          broker_positions=(BrokerPosition(ticker="AAPL", shares=5),), kill_switch=True)
+
+    decision = decide(_request(side="sell"), context)
+
+    assert decision.approved_quantity == 5

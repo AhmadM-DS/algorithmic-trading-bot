@@ -48,6 +48,13 @@ class BrokerOrder:
     limit_price: Decimal | None
     legs: tuple = ()
 
+@dataclass(frozen=True)
+class BrokerAccount:
+    """The account numbers risk reads: worth now, worth at yesterday's close, and what Alpaca lets it spend"""
+    equity: Decimal
+    last_equity: Decimal
+    buying_power: Decimal
+
 def _to_decimal(value) -> Decimal | None:
     """Turn one of Alpaca's number strings into a Decimal, keeping None"""
     return None if value is None else Decimal(str(value))
@@ -231,6 +238,40 @@ class AlpacaBroker:
             if len(page) < ACTIVITY_PAGE_SIZE:
                 return activities
             params = {**params, "page_token": page[-1]["id"]}
+
+    def get_account(self) -> BrokerAccount:
+        """Return the account's equity now, its equity at yesterday's close and its buying power
+
+        Returns:
+            A BrokerAccount
+
+        Raises:
+            BrokerUnavailable if Alpaca can't be asked
+        """
+        try:
+            account = self._call(self.client.get_account)
+        except OrderRejected as error:
+            raise BrokerUnavailable(f"Account lookup refused: {error}") from error
+        return BrokerAccount(equity=_to_decimal(account.equity), last_equity=_to_decimal(account.last_equity),
+                             buying_power=_to_decimal(account.buying_power))
+
+    def get_positions(self) -> dict:
+        """Return how many shares Alpaca holds of each ticker, for the whole account
+
+        Fractional shares (only possible from manual trades) are cut to whole shares, so a sell never asks
+        for more than Alpaca holds.
+
+        Returns:
+            {ticker: shares as an int}; empty if nothing is held
+
+        Raises:
+            BrokerUnavailable if Alpaca can't be asked
+        """
+        try:
+            positions = self._call(self.client.get_all_positions)
+        except OrderRejected as error:
+            raise BrokerUnavailable(f"Positions lookup refused: {error}") from error
+        return {position.symbol: int(_to_decimal(position.qty)) for position in positions}
 
     def cancel_order(self, alpaca_order_id: str):
         """Cancel one open order

@@ -1,10 +1,11 @@
 """
 test_risk_schema.py
-Integration tests for migration 005: skip reasons, risk decisions, their grants and the budget trigger
+Integration tests for migrations 005 and 008: skip reasons, risk decisions, their grants and the budget trigger
 """
 
 #Standard Library
 from datetime import date, datetime
+from decimal import Decimal
 
 #Third Party Libraries
 import pyodbc
@@ -44,14 +45,15 @@ def insert_signal(conn, taken, primary_skip_reason_id):
         (datetime(2026, 10, 26, 14, 15), taken, strategy_id(conn), ticker_id, primary_skip_reason_id),
     ).fetchone()[0]
 
-def insert_risk_decision(conn, signal_id):
+def insert_risk_decision(conn, signal_id, strategy_drawdown=6):
     """Insert one risk decision as the bot and return its id"""
     return conn.execute(
         "INSERT INTO risk_decisions (signal_id, sizer, sized_quantity, equity, buying_power, trading_budget, "
-        "account_exposure, strategy_exposure, ticker_exposure, open_positions, shares_held, broker_shares) "
+        "account_exposure, strategy_exposure, ticker_exposure, open_positions, shares_held, broker_shares, "
+        "strategy_daily_pnl, strategy_drawdown, account_daily_change, start_equity) "
         "OUTPUT INSERTED.risk_decision_id "
-        "VALUES (?, 'fixed_budget:1.0.0', 5, 1000, 1000, 250, 400, 200, 0, 4, 0, 0)",
-        signal_id,
+        "VALUES (?, 'fixed_budget:1.0.0', 5, 1000, 1000, 250, 400, 200, 0, 4, 0, 0, -4.5, ?, -12.3, 1000)",
+        (signal_id, strategy_drawdown),
     ).fetchone()[0]
 
 def insert_parameter(conn, risk_decision_id, proposed, fell_back):
@@ -130,6 +132,40 @@ def test_risk_decision_and_parameters_are_saved(bot_conn):
 
     saved = bot_conn.execute("SELECT used FROM risk_decision_parameters WHERE risk_decision_id = ?", decision_id).fetchone()
     assert saved.used == pytest.approx(0.2)
+
+def test_risk_decision_saves_snapshot_columns(bot_conn):
+    """Save today's P/L, the drawdown, the account's change and the starting equity with a decision (008)"""
+    decision_id = insert_risk_decision(bot_conn, insert_signal(bot_conn, taken=1, primary_skip_reason_id=None))
+
+    row = bot_conn.execute("SELECT strategy_daily_pnl, strategy_drawdown, account_daily_change, start_equity "
+                           "FROM risk_decisions WHERE risk_decision_id = ?", decision_id).fetchone()
+
+    assert tuple(row) == (Decimal("-4.5"), Decimal("6"), Decimal("-12.3"), Decimal("1000"))
+
+def test_risk_decision_at_peak_has_zero_drawdown(bot_conn):
+    """Accept a drawdown of 0, the value at the strategy's peak"""
+
+    decision_id = insert_risk_decision(bot_conn, insert_signal(bot_conn, taken=1, primary_skip_reason_id=None),
+                                       strategy_drawdown=0)
+
+    assert decision_id is not None
+
+def test_negative_drawdown_is_rejected(bot_conn):
+    """Reject a negative drawdown: it's how far below the peak, never above"""
+    signal_id = insert_signal(bot_conn, taken=1, primary_skip_reason_id=None)
+
+    with pytest.raises(pyodbc.IntegrityError, match="ck_risk_decisions_strategy_drawdown"):
+        insert_risk_decision(bot_conn, signal_id, strategy_drawdown=-1)
+
+def test_snapshot_columns_are_required(bot_conn):
+    """Reject a decision saved without the 008 columns, so no row is missing them"""
+    signal_id = insert_signal(bot_conn, taken=1, primary_skip_reason_id=None)
+
+    with pytest.raises(pyodbc.IntegrityError, match="does not allow nulls"):
+        bot_conn.execute(
+            "INSERT INTO risk_decisions (signal_id, sizer, sized_quantity, equity, buying_power, trading_budget, "
+            "account_exposure, strategy_exposure, ticker_exposure, open_positions, shares_held, broker_shares) "
+            "VALUES (?, 'fixed_budget:1.0.0', 5, 1000, 1000, 250, 400, 200, 0, 4, 0, 0)", signal_id)
 
 def test_one_risk_decision_per_signal(bot_conn):
     """Reject a second risk decision for the same signal"""

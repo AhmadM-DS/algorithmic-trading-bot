@@ -5,16 +5,20 @@ Decide every buy and sell: the one function the rest of the bot calls
 
 #Local Imports
 from config.constants import POSITION_SIZER
+from logger import trades_log
 from risk.context import RiskContext
 from risk.decisions import Decision, RiskRequest
-from risk.guardrails import (check_budget, check_buying_power, check_cooldown, check_leverage, check_max_positions,
-                             check_mode, check_order_size, check_positions_per_ticker, check_quantity,
-                             check_ticker_exposure)
+from risk.guardrails import (check_budget, check_buying_power, check_cooldown, check_daily_halt, check_drawdown,
+                             check_kill_switch, check_leverage, check_max_positions, check_mode, check_order_size,
+                             check_positions_per_ticker, check_quantity, check_ticker_exposure, cooldown_parameter)
 from risk.sizers import SIZERS
 
 GUARDRAILS = {
     "day": (
         check_mode,
+        check_kill_switch,
+        check_drawdown,
+        check_daily_halt,
         check_leverage,
         check_buying_power,
         check_budget,
@@ -65,11 +69,27 @@ def _decide_buy(request: RiskRequest, context: RiskContext) -> Decision:
         if reason is not None:
             failed_checks.append(reason)
 
+    if "zero_quantity" in failed_checks:
+        _log_zero_quantity(request, context, sizing)
     approved = sizing.quantity if not failed_checks else 0
     skip_reason = failed_checks[0] if failed_checks else None
     return Decision(approved_quantity=approved, skip_reason=skip_reason, failed_checks=tuple(failed_checks),
                     sizer=f"{sizer.NAME}:{sizer.VERSION}", sized_quantity=sizing.quantity,
-                    parameters=sizing.parameters)
+                    parameters=sizing.parameters + _check_parameters(request, context))
+
+def _check_parameters(request: RiskRequest, context: RiskContext) -> tuple:
+    """Return the parameters the guardrails used for this buy (drawdown limit, cooldown), to save with the decision"""
+    used = (context.strategy(request.strategy_id).drawdown_limit, cooldown_parameter(request, context))
+    return tuple(parameter for parameter in used if parameter is not None)
+
+def _log_zero_quantity(request: RiskRequest, context: RiskContext, sizing):
+    """Log why a buy couldn't afford one share: the budget, the slot, buying power and the price"""
+    state = context.strategy(request.strategy_id)
+    fraction = next((p.used for p in sizing.parameters if p.name == "position_fraction"), None)
+    slot = f"${state.trading_budget * fraction:.2f}" if fraction is not None else "unknown"
+    trades_log.info(f"zero_quantity: {state.name or request.strategy_id} {request.signal.ticker} costs "
+                    f"${request.price:.2f} a share, more than its slot of {slot} (budget ${state.trading_budget:.2f}, "
+                    f"buying power ${context.buying_power:.2f})")
 
 def _decide_sell(request: RiskRequest, context: RiskContext) -> Decision:
     """Sell what this strategy holds, capped by what Alpaca holds so it can never go short"""

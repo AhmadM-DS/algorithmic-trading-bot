@@ -11,7 +11,8 @@ import math
 import pytest
 
 #Local Imports
-from config.constants import RISK_PARAMETERS
+from config.constants import DAILY_HALT_LIMITS, ENABLED_HOLDING_TYPES, RISK_EQUITY_CAP, RISK_PARAMETERS
+from config.settings import ALLOWED_TRADING_MODES
 from risk.context import RiskContext
 from risk.parameters import PROVIDERS, apply_bounds, get_parameter
 
@@ -222,3 +223,25 @@ def test_switched_provider_is_restored_after_test():
 
     assert RISK_PARAMETERS["position_fraction"]["provider"] == "static"
     assert value.provider == "static:1.0.0"
+
+def test_daily_loss_limits_stay_below_drawdown_minimum():
+    """Keep every daily loss limit under the drawdown limit's lowest value, or the drawdown limit trips first on every bad day"""
+    lowest_drawdown = RISK_PARAMETERS["drawdown_limit"]["min"]
+
+    losses = [limits["loss"] for limits in DAILY_HALT_LIMITS.values()]
+
+    assert all(loss < lowest_drawdown for loss in losses)
+
+def test_every_enabled_holding_type_has_daily_halt_limits():
+    """Give every holding type that can trade a daily halt, so turning swing on can't skip it"""
+
+    missing = [holding_type for holding_type in ENABLED_HOLDING_TYPES if holding_type not in DAILY_HALT_LIMITS]
+
+    assert missing == []
+
+def test_every_trading_mode_has_an_equity_cap_setting():
+    """Name a cap (or None) for paper and live, so switching TRADING_MODE can't hit a missing key"""
+
+    modes = {mode.upper() for mode in ALLOWED_TRADING_MODES}
+
+    assert set(RISK_EQUITY_CAP) == modes

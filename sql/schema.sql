@@ -140,10 +140,15 @@ CREATE TABLE risk_decisions
     open_positions    INT           NOT NULL,
     shares_held       INT           NOT NULL,
     broker_shares     INT           NOT NULL,
+    strategy_daily_pnl   DECIMAL(19,4) NOT NULL,
+    strategy_drawdown    DECIMAL(19,4) NOT NULL,
+    account_daily_change DECIMAL(19,4) NOT NULL,
+    start_equity         DECIMAL(19,4) NOT NULL,
     CONSTRAINT pk_risk_decisions PRIMARY KEY (risk_decision_id),
     CONSTRAINT fk_risk_decisions_signal_id FOREIGN KEY (signal_id) REFERENCES signals (signal_id),
     CONSTRAINT uq_risk_decisions_signal_id UNIQUE (signal_id),
-    CONSTRAINT ck_risk_decisions_sized_quantity CHECK (sized_quantity >= 0)
+    CONSTRAINT ck_risk_decisions_sized_quantity CHECK (sized_quantity >= 0),
+    CONSTRAINT ck_risk_decisions_strategy_drawdown CHECK (strategy_drawdown >= 0)
 );
 GO
 
