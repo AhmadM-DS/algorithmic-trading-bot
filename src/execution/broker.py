@@ -5,6 +5,7 @@ The only module that places, finds and cancels orders through alpaca-py
 
 #Standard Library
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 
 #Third Party Libraries
@@ -13,6 +14,9 @@ from alpaca.common.exceptions import APIError
 from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
 from alpaca.trading.requests import (GetOrderByIdRequest, MarketOrderRequest, StopLossRequest,
                                      TakeProfitRequest)
+
+#Local Imports
+from config.constants import ACTIVITY_PAGE_SIZE
 
 DUPLICATE_MESSAGE = "client_order_id must be unique"
 
@@ -181,6 +185,52 @@ class AlpacaBroker:
             raise BrokerUnavailable(f"Lookup of {client_order_id} refused: {error}") from error
         nested = GetOrderByIdRequest(nested=True)
         return _to_broker_order(self._call(self.client.get_order_by_id, found.id, nested))
+
+    def get_order(self, alpaca_order_id: str) -> BrokerOrder | None:
+        """Look an order up by Alpaca's ID
+
+        Parameters:
+            alpaca_order_id (str): Alpaca's ID for the order (a bracket leg has its own)
+
+        Returns:
+            Alpaca's version of the order, or None if Alpaca has no order with that ID
+
+        Raises:
+            BrokerUnavailable if Alpaca can't be asked
+        """
+        try:
+            return _to_broker_order(self._call(self.client.get_order_by_id, alpaca_order_id))
+        except OrderRejected as error:
+            if error.__cause__.status_code == 404:
+                return None
+            raise BrokerUnavailable(f"Lookup of {alpaca_order_id} refused: {error}") from error
+
+    def get_fill_activities(self, since: datetime) -> list:
+        """Return every FILL account activity after a time, oldest first, reading every page
+
+        alpaca-py has no method for activities, so this calls the REST endpoint through the client.
+
+        Parameters:
+            since (datetime): Naive UTC; only fills after this time
+
+        Returns:
+            A list of Alpaca's activity dicts, e.g. {"id": "20261030134220960::7f05...", "order_id": ...,
+            "side": "buy", "qty": "1", "price": "755.22", "cum_qty": "1", "leaves_qty": "0", ...}
+
+        Raises:
+            BrokerUnavailable if Alpaca can't be asked
+        """
+        params = {"after": since.strftime("%Y-%m-%dT%H:%M:%SZ"), "direction": "asc", "page_size": ACTIVITY_PAGE_SIZE}
+        activities = []
+        while True:
+            try:
+                page = self._call(self.client.get, "/account/activities/FILL", params)
+            except OrderRejected as error:
+                raise BrokerUnavailable(f"Activities refused: {error}") from error
+            activities += page
+            if len(page) < ACTIVITY_PAGE_SIZE:
+                return activities
+            params = {**params, "page_token": page[-1]["id"]}
 
     def cancel_order(self, alpaca_order_id: str):
         """Cancel one open order

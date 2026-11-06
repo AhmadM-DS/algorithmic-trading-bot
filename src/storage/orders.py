@@ -22,7 +22,7 @@ def insert_order(conn, *, client_order_id: str, side: str, quantity: int, order_
                  submitted_at: datetime, status: str, strategy_id: int, ticker_id: int,
                  request_price: Decimal | None = None, signal_id: int | None = None,
                  position_id: int | None = None, parent_order_id: int | None = None,
-                 alpaca_order_id: str | None = None) -> int:
+                 alpaca_order_id: str | None = None, exit_reason: str | None = None) -> int:
     """Save one order and return its order_id
 
     A buy is saved with status "submitting" before it's sent to Alpaca; bracket legs are saved
@@ -44,6 +44,7 @@ def insert_order(conn, *, client_order_id: str, side: str, quantity: int, order_
         position_id (int | None): The position an exit order closes, if known
         parent_order_id (int | None): The buy a bracket leg belongs to
         alpaca_order_id (str | None): Alpaca's ID, if already known
+        exit_reason (str | None): Why a sell was placed, e.g. "end_of_day" or "stop_loss"; None on buys
 
     Returns:
         The new order_id as an int
@@ -54,11 +55,11 @@ def insert_order(conn, *, client_order_id: str, side: str, quantity: int, order_
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO orders (client_order_id, alpaca_order_id, side, requested_quantity, order_type, time_in_force, submitted_at, [status], "
-        "request_price, strategy_id, ticker_id, signal_id, position_id, parent_order_id) "
+        "request_price, strategy_id, ticker_id, signal_id, position_id, parent_order_id, exit_reason) "
         "OUTPUT INSERTED.order_id "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (client_order_id, alpaca_order_id, side, quantity, order_type, time_in_force, submitted_at, status,
-         request_price, strategy_id, ticker_id, signal_id, position_id, parent_order_id),
+         request_price, strategy_id, ticker_id, signal_id, position_id, parent_order_id, exit_reason),
     )
     order_id = cursor.fetchone()[0]
     db_log.debug(f"orders saved: {client_order_id} as order_id {order_id} ({status})")
