@@ -198,3 +198,43 @@ def test_last_exit_is_none_without_exits():
     last = CONTEXT.last_exit(ICT, "AAPL")
 
     assert last is None
+
+def test_pnl_today_returns_the_holding_types_pnl():
+    """Return today's realized P/L for day trades"""
+    state = StrategyState(strategy_id=MOMENTUM, mode="live", effective_budget=250.0, daily_pnl={"day": -4.5})
+
+    pnl = state.pnl_today("day")
+
+    assert pnl == -4.5
+
+def test_pnl_today_is_zero_when_nothing_closed():
+    """Return 0 for a holding type with no closes today"""
+    state = StrategyState(strategy_id=MOMENTUM, mode="live", effective_budget=250.0, daily_pnl={"day": -4.5})
+
+    pnl = state.pnl_today("swing")
+
+    assert pnl == 0.0
+
+def test_previous_returns_the_last_value_used_before_today():
+    """Return the saved value for this strategy and parameter"""
+    context = RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=1000.0, strategies=(), open_positions=(),
+                          recent_exits=(), broker_positions=(),
+                          previous_parameters={(MOMENTUM, "position_fraction"): 0.18})
+
+    previous = context.previous(MOMENTUM, "position_fraction")
+
+    assert previous == 0.18
+
+def test_previous_is_none_without_history():
+    """Return None so the rate limit is skipped for a parameter never used before today"""
+
+    previous = CONTEXT.previous(MOMENTUM, "position_fraction")
+
+    assert previous is None
+
+def test_new_snapshot_fields_default_to_no_halts():
+    """Default to no kill switch, no scale-down and no events, so R1's snapshots still work unchanged"""
+
+    defaults = (CONTEXT.kill_switch, CONTEXT.scale_down, CONTEXT.events, CONTEXT.strategy(MOMENTUM).drawdown_paused)
+
+    assert defaults == (False, 1.0, (), False)

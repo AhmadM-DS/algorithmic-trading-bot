@@ -13,7 +13,7 @@ from uuid import UUID
 import pytest
 import requests
 from alpaca.common.exceptions import APIError
-from alpaca.trading.models import Order
+from alpaca.trading.models import Order, Position, TradeAccount
 
 #Local Imports
 from config.constants import ALPACA_TIMEOUT_SECONDS
@@ -76,6 +76,14 @@ class FakeTradingClient:
 
     def cancel_order_by_id(self, order_id):
         self.calls.append(("cancel_order_by_id", order_id))
+        return self._respond(self.error)
+
+    def get_account(self):
+        self.calls.append(("get_account",))
+        return self._respond(self.error)
+
+    def get_all_positions(self):
+        self.calls.append(("get_all_positions",))
         return self._respond(self.error)
 
     def get(self, path, params):
@@ -316,3 +324,60 @@ def test_session_keeps_callers_own_timeout(sent_kwargs):
     RateLimitedSession(RateLimiter()).request("GET", "https://paper-api.alpaca.markets/v2/clock", timeout=3)
 
     assert sent_kwargs["timeout"] == 3
+
+def account_json(equity="18345.99", last_equity="18400.00", buying_power="73383.96"):
+    """Return an account as Alpaca's API sends it (numbers are strings)"""
+    return {"id": "8f3c0f8e-0000-4000-8000-000000000001", "account_number": "PA1234", "status": "ACTIVE",
+            "crypto_status": "ACTIVE", "currency": "USD", "buying_power": buying_power, "regt_buying_power": buying_power,
+            "daytrading_buying_power": "0", "non_marginable_buying_power": equity, "cash": equity,
+            "accrued_fees": "0", "portfolio_value": equity, "pattern_day_trader": False, "trading_blocked": False,
+            "transfers_blocked": False, "account_blocked": False, "created_at": "2026-01-02T15:00:00Z",
+            "trade_suspended_by_user": False, "multiplier": "4", "shorting_enabled": True, "equity": equity,
+            "last_equity": last_equity, "long_market_value": "0", "short_market_value": "0", "initial_margin": "0",
+            "maintenance_margin": "0", "last_maintenance_margin": "0", "sma": "0", "daytrade_count": 0}
+
+def position_json(symbol, qty):
+    """Return one position as Alpaca's API sends it"""
+    return {"asset_id": "b0b6dd9d-8b9b-48a9-ba46-b9d54906e415", "symbol": symbol, "exchange": "NASDAQ",
+            "asset_class": "us_equity", "avg_entry_price": "5.00", "qty": qty, "side": "long",
+            "market_value": "50", "cost_basis": "50", "unrealized_pl": "0", "unrealized_plpc": "0",
+            "unrealized_intraday_pl": "0", "unrealized_intraday_plpc": "0", "current_price": "5.00",
+            "lastday_price": "5.00", "change_today": "0", "qty_available": qty}
+
+def test_get_account_returns_equity_last_equity_and_buying_power():
+    """Turn Alpaca's account numbers into Decimals"""
+    client = FakeTradingClient(answer=TradeAccount(**account_json()))
+
+    account = AlpacaBroker(client).get_account()
+
+    assert (account.equity, account.last_equity, account.buying_power) ==            (Decimal("18345.99"), Decimal("18400.00"), Decimal("73383.96"))
+
+def test_get_account_raises_when_alpaca_cant_be_asked():
+    """Raise BrokerUnavailable on a timeout so risk skips buys this cycle"""
+    client = FakeTradingClient(error=requests.exceptions.Timeout("read timed out"))
+
+    with pytest.raises(BrokerUnavailable, match="No answer"):
+        AlpacaBroker(client).get_account()
+
+def test_get_positions_returns_shares_per_ticker():
+    """Return every held ticker with its whole share count"""
+    client = FakeTradingClient(answer=[Position(**position_json("AAPL", "10")), Position(**position_json("SPY", "1"))])
+
+    positions = AlpacaBroker(client).get_positions()
+
+    assert positions == {"AAPL": 10, "SPY": 1}
+
+def test_get_positions_cuts_fractional_shares():
+    """Cut 2.5 shares to 2, so a sell never asks for more than Alpaca holds"""
+    client = FakeTradingClient(answer=[Position(**position_json("AAPL", "2.5"))])
+
+    positions = AlpacaBroker(client).get_positions()
+
+    assert positions == {"AAPL": 2}
+
+def test_get_positions_is_empty_when_nothing_is_held():
+    """Return an empty dict for a flat account"""
+
+    positions = AlpacaBroker(FakeTradingClient(answer=[])).get_positions()
+
+    assert positions == {}

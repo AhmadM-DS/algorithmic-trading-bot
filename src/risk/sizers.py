@@ -37,7 +37,8 @@ class FixedBudgetSizer:
         """
         state = context.strategy(request.strategy_id)
         budget = state.trading_budget
-        fraction = get_parameter("position_fraction", request.strategy_id, context)
+        fraction = get_parameter("position_fraction", request.strategy_id, context,
+                                 context.previous(request.strategy_id, "position_fraction"))
         dollars = budget * fraction.used
         quantity = math.floor(round(dollars / request.price, 9))
         return Sizing(quantity=quantity, parameters=(fraction,))
