@@ -230,6 +230,7 @@ CREATE TABLE orders
     signal_id          INT           NULL,
     position_id        INT           NULL,
     parent_order_id    INT           NULL,
+    exit_reason        NVARCHAR(50)  NULL,
     CONSTRAINT pk_orders PRIMARY KEY (order_id),
     CONSTRAINT fk_orders_strategy_id     FOREIGN KEY (strategy_id)     REFERENCES strategies (strategy_id),
     CONSTRAINT fk_orders_ticker_id       FOREIGN KEY (ticker_id)       REFERENCES tickers (ticker_id),
@@ -239,7 +240,10 @@ CREATE TABLE orders
     CONSTRAINT uq_orders_client_order_id UNIQUE (client_order_id),
     CONSTRAINT ck_orders_side CHECK (side IN ('buy', 'sell')),
     CONSTRAINT ck_orders_requested_quantity CHECK (requested_quantity > 0),
-    CONSTRAINT ck_orders_filled_quantity CHECK (filled_quantity >= 0 AND filled_quantity <= requested_quantity)
+    CONSTRAINT ck_orders_filled_quantity CHECK (filled_quantity >= 0 AND filled_quantity <= requested_quantity),
+    CONSTRAINT ck_orders_exit_reason CHECK (exit_reason IN
+        ('signal', 'take_profit', 'stop_loss', 'end_of_day', 'kill_switch', 'manual', 'liquidation')),
+    CONSTRAINT ck_orders_exit_reason_sells_only CHECK (side = 'sell' OR exit_reason IS NULL)
 );
 GO
 

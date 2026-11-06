@@ -117,6 +117,15 @@ def test_accepted_buy_saves_order_and_both_legs(conn, alerts):
                                            ("stop", "sell", "held", Decimal("4.90"), buy.order_id, "alpaca-stop")]
     assert alerts == []
 
+def test_legs_are_saved_with_their_exit_reason(conn, alerts):
+    """Save the target leg as take_profit and the stop leg as stop_loss, and nothing on the buy"""
+    broker = FakeBroker(conn, sends=[accepted_buy()])
+
+    place(conn, broker, buy_request(conn))
+
+    assert [(row.order_type, row.exit_reason) for row in rows(conn)] == \
+           [("market", None), ("limit", "take_profit"), ("stop", "stop_loss")]
+
 def test_row_is_committed_before_sending(conn, alerts):
     """Commit the 'submitting' row before Alpaca is called, then commit Alpaca's answer"""
     broker = FakeBroker(conn, sends=[accepted_buy()])
@@ -147,10 +156,12 @@ def test_sell_is_a_plain_market_order(conn, alerts):
     answer = BrokerOrder("alpaca-sell", "ignored", "sell", "market", "day", "accepted", 10, 0, None, None, None)
     broker = FakeBroker(conn, sends=[answer])
 
-    result = place(conn, broker, buy_request(conn, side="sell", stop_price=None, target_price=None))
+    result = place(conn, broker, buy_request(conn, side="sell", stop_price=None, target_price=None,
+                                             exit_reason="end_of_day"))
 
     assert broker.calls[0][0] == "sell"
-    assert (result.status, len(rows(conn)), rows(conn)[0].side) == ("accepted", 1, "sell")
+    assert (result.status, len(rows(conn)), rows(conn)[0].side, rows(conn)[0].exit_reason) == \
+           ("accepted", 1, "sell", "end_of_day")
 
 def test_invalid_exit_prices_skip_without_saving_or_sending(conn, alerts):
     """Skip a buy whose stop isn't below the price, before anything is saved or sent"""

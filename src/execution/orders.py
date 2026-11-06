@@ -21,6 +21,7 @@ from storage.orders import (get_stuck_orders, insert_order, save_broker_answer, 
 CENT = Decimal("0.01")
 SUB_PENNY = Decimal("0.0001")
 CLIENT_ORDER_ID_LENGTH = 128
+LEG_EXIT_REASONS = {"stop": "stop_loss", "limit": "take_profit"}
 
 @dataclass(frozen=True)
 class OrderRequest:
@@ -37,6 +38,7 @@ class OrderRequest:
     target_price: Decimal | None = None
     signal_id: int | None = None
     position_id: int | None = None
+    exit_reason: str | None = None
 
     def __post_init__(self):
         """Reject a request that can only come from a bug"""
@@ -53,6 +55,9 @@ class OrderRequest:
         if self.side == "buy" and (self.stop_price is None or self.target_price is None):
             raise ValueError(f"buy of {self.ticker} has stop {self.stop_price!r} and target {self.target_price!r}. "
                              "Expected both, since every buy is a bracket order")
+        if (self.side == "sell") != (self.exit_reason is not None):
+            raise ValueError(f"{self.side} of {self.ticker} has exit_reason {self.exit_reason!r}. "
+                             "Expected one on every sell and none on buys")
 
 @dataclass(frozen=True)
 class OrderResult:
@@ -168,7 +173,8 @@ def _save_legs(conn, answer, order_id: int, strategy_id: int, ticker_id: int, si
                      side=leg.side, quantity=leg.quantity, order_type=leg.order_type,
                      time_in_force=leg.time_in_force, submitted_at=now, status=leg.status,
                      request_price=leg.stop_price if leg.stop_price is not None else leg.limit_price,
-                     strategy_id=strategy_id, ticker_id=ticker_id, signal_id=signal_id, parent_order_id=order_id)
+                     strategy_id=strategy_id, ticker_id=ticker_id, signal_id=signal_id, parent_order_id=order_id,
+                     exit_reason=LEG_EXIT_REASONS.get(leg.order_type))
 
 def _utc_now() -> datetime:
     """Return the current UTC time without a time zone, as the database stores it"""
@@ -209,7 +215,7 @@ def place_order(request: OrderRequest, conn, broker, now: datetime | None = None
                             order_type="market", time_in_force=time_in_force, submitted_at=now,
                             status="submitting", strategy_id=request.strategy_id, ticker_id=request.ticker_id,
                             request_price=Decimal(str(request.price)), signal_id=request.signal_id,
-                            position_id=request.position_id)
+                            position_id=request.position_id, exit_reason=request.exit_reason)
     conn.commit()
 
     dollars = Decimal(str(request.price)) * request.quantity

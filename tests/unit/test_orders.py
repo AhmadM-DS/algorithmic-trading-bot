@@ -68,16 +68,19 @@ def request(**overrides):
     return OrderRequest(**values)
 
 def test_valid_requests_are_accepted():
-    """Accept a buy with both exits and a sell with none"""
+    """Accept a buy with both exits and a sell with an exit reason"""
 
     request()
-    request(side="sell", stop_price=None, target_price=None)
+    request(side="sell", stop_price=None, target_price=None, exit_reason="end_of_day")
 
 @pytest.mark.parametrize("overrides, message", [({"quantity": 0}, "quantity"), ({"quantity": -1}, "quantity"),
                                                 ({"side": "short"}, "side"), ({"price": 0}, "price"),
                                                 ({"holding_type": "scalp"}, "holding_type"),
                                                 ({"stop_price": None}, "bracket"),
-                                                ({"target_price": None}, "bracket")])
+                                                ({"target_price": None}, "bracket"),
+                                                ({"exit_reason": "signal"}, "exit_reason"),
+                                                ({"side": "sell", "stop_price": None, "target_price": None},
+                                                 "exit_reason")])
 def test_invalid_requests_raise(overrides, message):
     """Refuse requests that can only come from a bug"""
 

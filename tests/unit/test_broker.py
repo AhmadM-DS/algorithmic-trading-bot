@@ -5,7 +5,7 @@ Unit tests for execution/broker.py and the session timeout, with a fake alpaca-p
 
 #Standard Library
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -50,10 +50,11 @@ def api_error(status_code, message):
 class FakeTradingClient:
     """Stands in for alpaca-py's TradingClient: records calls, returns or raises what it's given"""
 
-    def __init__(self, answer=None, error=None, lookup_error=None):
+    def __init__(self, answer=None, error=None, lookup_error=None, pages=()):
         self.answer = answer
         self.error = error
         self.lookup_error = lookup_error
+        self.pages = list(pages)
         self.calls = []
 
     def _respond(self, error=None):
@@ -69,13 +70,19 @@ class FakeTradingClient:
         self.calls.append(("get_order_by_client_id", client_order_id))
         return self._respond(self.lookup_error)
 
-    def get_order_by_id(self, order_id, request):
-        self.calls.append(("get_order_by_id", order_id, request.nested))
+    def get_order_by_id(self, order_id, request=None):
+        self.calls.append(("get_order_by_id", order_id, request.nested if request else None))
         return self._respond(self.error)
 
     def cancel_order_by_id(self, order_id):
         self.calls.append(("cancel_order_by_id", order_id))
         return self._respond(self.error)
+
+    def get(self, path, params):
+        self.calls.append(("get", path, dict(params)))
+        if self.error is not None:
+            raise self.error
+        return self.pages.pop(0)
 
 def submit_buy(broker):
     """Send the same bracket buy in every test"""
@@ -204,6 +211,60 @@ def test_find_order_raises_when_alpaca_cant_be_asked():
 
     with pytest.raises(BrokerUnavailable):
         AlpacaBroker(client).find_order("momentum-AAPL-buy-x")
+
+def test_get_order_looks_up_by_alpacas_id():
+    """Look an order (or a single leg) up by Alpaca's ID, without its legs"""
+    client = FakeTradingClient(answer=Order(**order_json(STOP_ID, "leg-stop", "sell", "stop", status="canceled",
+                                                         stop="5.02", order_class="simple")))
+
+    order = AlpacaBroker(client).get_order(STOP_ID)
+
+    assert client.calls == [("get_order_by_id", STOP_ID, None)]
+    assert (order.alpaca_order_id, order.status, order.stop_price) == (STOP_ID, "canceled", Decimal("5.02"))
+
+def test_get_order_returns_none_when_alpaca_has_no_such_order():
+    """Return None on Alpaca's 404"""
+    client = FakeTradingClient(error=api_error(404, "order not found"))
+
+    assert AlpacaBroker(client).get_order(STOP_ID) is None
+
+def test_get_order_raises_when_alpaca_cant_be_asked():
+    """Raise BrokerUnavailable when the lookup itself failed"""
+    client = FakeTradingClient(error=requests.exceptions.Timeout("read timed out"))
+
+    with pytest.raises(BrokerUnavailable, match="No answer"):
+        AlpacaBroker(client).get_order(STOP_ID)
+
+def activity(number):
+    """Return a FILL activity with a distinct ID"""
+    return {"id": f"20261030134220960::fill-{number}", "order_id": BUY_ID, "side": "buy", "qty": "1"}
+
+def test_fill_activities_asks_for_fills_after_a_time_oldest_first():
+    """Ask the FILL endpoint for fills after the time, oldest first"""
+    client = FakeTradingClient(pages=[[activity(1)]])
+
+    found = AlpacaBroker(client).get_fill_activities(datetime(2026, 10, 30, 17, 37, 20, 500000))
+
+    assert client.calls == [("get", "/account/activities/FILL",
+                             {"after": "2026-10-30T17:37:20Z", "direction": "asc", "page_size": 100})]
+    assert found == [activity(1)]
+
+def test_fill_activities_reads_every_page():
+    """Ask for the next page from the last ID while a page comes back full"""
+    full_page = [activity(n) for n in range(100)]
+    client = FakeTradingClient(pages=[full_page, [activity(100)]])
+
+    found = AlpacaBroker(client).get_fill_activities(datetime(2026, 10, 30))
+
+    assert len(found) == 101
+    assert client.calls[1][2]["page_token"] == "20261030134220960::fill-99"
+
+def test_fill_activities_raise_when_alpaca_cant_be_asked():
+    """Raise BrokerUnavailable on a server error"""
+    client = FakeTradingClient(error=api_error(500, "internal error"))
+
+    with pytest.raises(BrokerUnavailable, match="500"):
+        AlpacaBroker(client).get_fill_activities(datetime(2026, 10, 30))
 
 def test_cancel_order_sends_alpacas_id():
     """Cancel by Alpaca's order ID"""
