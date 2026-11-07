@@ -12,13 +12,9 @@ import pyodbc
 import pytest
 
 #Local Imports
+from config.constants import SKIP_PRIORITY
 from storage.watchlist import get_or_create_ticker
 
-AGREED_PRIORITY = ["shadow", "strategy_off", "kill_switch", "audit_mismatch", "drawdown_limit", "daily_halt",
-                   "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",
-                   "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "invalid_exit_prices",
-                   "nothing_to_sell"]
-"""Every skip code in the priority order agreed in the R1 and E1 decisions"""
 
 def as_admin(conn, sql, params=()):
     """Run one statement as the admin (the bot can't change strategies), then switch back to the bot"""
@@ -71,11 +67,11 @@ def budget_events(conn, strategy):
     return [row.details for row in rows]
 
 def test_skip_reasons_follow_agreed_priority(bot_conn):
-    """Seed every skip code in the agreed priority order"""
+    """Seed every skip code in the priority order the code uses (R1, E1 and E2 decisions)"""
 
     rows = bot_conn.execute("SELECT code FROM skip_reasons ORDER BY [priority]").fetchall()
 
-    assert [row.code for row in rows] == AGREED_PRIORITY
+    assert tuple(row.code for row in rows) == SKIP_PRIORITY
 
 def test_bot_cannot_add_skip_reasons(bot_conn):
     """Keep the skip code list for migrations only"""

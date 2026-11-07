@@ -20,6 +20,7 @@ BUILD_FILES = [SQL_DIR / "migrations" / "001_initial_schema.sql",
                SQL_DIR / "migrations" / "006_order_legs.sql",
                SQL_DIR / "migrations" / "007_order_exit_reason.sql",
                SQL_DIR / "migrations" / "008_risk_snapshot_columns.sql",
+               SQL_DIR / "migrations" / "009_order_reviews.sql",
                SQL_DIR / "views.sql"]
 
 # Never read from .env: this database gets dropped on every run.

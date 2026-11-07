@@ -4,7 +4,7 @@ Hold the RiskContext snapshot: everything risk knows about the account at one mo
 """
 
 #Standard Library
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 #Local Imports
@@ -90,6 +90,23 @@ class OpenPosition:
         return self.shares_held * self.avg_entry_price
 
 @dataclass(frozen=True)
+class PendingBuy:
+    """A buy order sent but not filled yet: its money is spoken for before it becomes a position
+
+    has_position is True once part of it filled (that part is already an OpenPosition), so it isn't counted twice.
+    """
+    strategy_id: int
+    ticker: str
+    quantity: int
+    price: float
+    has_position: bool = False
+
+    @property
+    def cost(self) -> float:
+        """Return the money the unfilled shares will take at the price the order was sized with"""
+        return self.quantity * self.price
+
+@dataclass(frozen=True)
 class RecentExit:
     """One position closed today, used for cooldowns"""
     strategy_id: int
@@ -110,7 +127,8 @@ class RiskContext:
     equity is capped by RISK_EQUITY_CAP. account_daily_change is Alpaca's equity minus last_equity (uncapped
     dollars); start_equity is the capped last_equity, the kill switch's base. scale_down is the factor every
     live budget was multiplied by (1.0 when the account covers them). previous_parameters holds the last value
-    used before today for each (strategy_id, name). events are the states that started this cycle.
+    used before today for each (strategy_id, name). events are the states that started this cycle. pending_buys
+    are buy orders not filled yet; exposure and position counts include them.
     """
     as_of: datetime
     equity: float
@@ -125,6 +143,7 @@ class RiskContext:
     scale_down: float = 1.0
     previous_parameters: dict = field(default_factory=dict)
     events: tuple[RiskEvent, ...] = ()
+    pending_buys: tuple[PendingBuy, ...] = ()
 
     def __post_init__(self):
         """Reject a naive as_of time"""
@@ -165,8 +184,23 @@ class RiskContext:
             and (ticker is None or p.ticker == ticker)
         ))
 
+    def pending(self, strategy_id: int | None = None, ticker: str | None = None) -> tuple[PendingBuy, ...]:
+        """Return the pending buys matching a strategy and / or ticker; None means any
+
+        Parameters:
+            strategy_id (int | None): Only this strategy's buys
+            ticker (str | None): Only this ticker's buys
+
+        Returns:
+            A tuple of PendingBuy, empty if none match
+        """
+        return tuple(b for b in self.pending_buys if (
+            (strategy_id is None or b.strategy_id == strategy_id)
+            and (ticker is None or b.ticker == ticker)
+        ))
+
     def exposure(self, strategy_id: int | None = None, ticker: str | None = None) -> float:
-        """Return the money tied up in matching open positions, at entry prices
+        """Return the money tied up in matching open positions (at entry prices) and pending buys
 
         Parameters:
             strategy_id (int | None): Only this strategy's positions
@@ -175,7 +209,36 @@ class RiskContext:
         Returns:
             The summed cost, 0 if nothing matches
         """
-        return sum(p.cost for p in self.positions(strategy_id, ticker))
+        held = sum(p.cost for p in self.positions(strategy_id, ticker))
+        return held + sum(b.cost for b in self.pending(strategy_id, ticker))
+
+    def position_count(self, strategy_id: int | None = None, ticker: str | None = None) -> int:
+        """Return how many matching positions are open or on their way (a pending buy with no fill yet)
+
+        Parameters:
+            strategy_id (int | None): Only this strategy's positions
+            ticker (str | None): Only this ticker's positions
+
+        Returns:
+            The count, 0 if nothing matches
+        """
+        on_the_way = sum(1 for b in self.pending(strategy_id, ticker) if not b.has_position)
+        return len(self.positions(strategy_id, ticker)) + on_the_way
+
+    def with_pending_buy(self, strategy_id: int, ticker: str, quantity: int, price: float) -> "RiskContext":
+        """Return a copy of this snapshot with one more pending buy, for the next signal in the same cycle
+
+        Parameters:
+            strategy_id (int): The strategy that was approved
+            ticker (str): The ticker it buys
+            quantity (int): The approved shares
+            price (float): The price it was sized with
+
+        Returns:
+            A new RiskContext; this one doesn't change
+        """
+        added = PendingBuy(strategy_id=strategy_id, ticker=ticker, quantity=quantity, price=price)
+        return replace(self, pending_buys=self.pending_buys + (added,))
 
     def shares_held(self, strategy_id: int, ticker: str) -> int:
         """Return how many shares of a ticker one strategy holds across its open positions

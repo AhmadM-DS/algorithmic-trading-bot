@@ -87,7 +87,7 @@ def check_quantity(request: RiskRequest, context: RiskContext, quantity: int) ->
     return "zero_quantity" if quantity == 0 else None
 
 def check_max_positions(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
-    """Block a buy when the whole account already holds MAX_OPEN_POSITIONS positions
+    """Block a buy when the whole account already holds (or has buys on the way for) MAX_OPEN_POSITIONS positions
 
     Parameters:
         request (RiskRequest): The buy being checked
@@ -97,11 +97,11 @@ def check_max_positions(request: RiskRequest, context: RiskContext, quantity: in
     Returns:
         "max_positions" if the account is full, None otherwise
     """
-    open_count = len(context.positions())
+    open_count = context.position_count()
     return "max_positions" if open_count >= MAX_OPEN_POSITIONS else None
 
 def check_positions_per_ticker(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
-    """Block a buy when this strategy already holds MAX_POSITIONS_PER_TICKER positions in the ticker
+    """Block a buy when this strategy already holds (or is buying) MAX_POSITIONS_PER_TICKER positions in the ticker
 
     Parameters:
         request (RiskRequest): The buy being checked
@@ -111,7 +111,7 @@ def check_positions_per_ticker(request: RiskRequest, context: RiskContext, quant
     Returns:
         "max_positions_per_ticker" if this strategy can't stack more of the ticker, None otherwise
     """
-    open_count = len(context.positions(request.strategy_id, request.signal.ticker))
+    open_count = context.position_count(request.strategy_id, request.signal.ticker)
     return "max_positions_per_ticker" if open_count >= MAX_POSITIONS_PER_TICKER else None
 
 def _order_dollars(request: RiskRequest, quantity: int) -> float:

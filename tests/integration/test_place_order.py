@@ -185,6 +185,25 @@ def test_rejection_is_saved_alerted_and_never_retried(conn, alerts):
     assert (len(broker.calls), sleeps, len(alerts)) == (1, [], 1)
     assert "insufficient buying power" in alerts[0]
 
+def test_not_tradable_rejection_switches_the_ticker_off(conn, alerts):
+    """Mark the ticker is_active = 0 with a bot_events row when Alpaca refuses it as not tradable"""
+    broker = FakeBroker(conn, sends=[OrderRejected("asset AAPL is not tradable")])
+
+    place(conn, broker, buy_request(conn))
+
+    active = conn.execute("SELECT is_active FROM tickers WHERE ticker = 'AAPL'").fetchone()[0]
+    events = conn.execute("SELECT COUNT(*) FROM bot_events WHERE event_type = 'ticker_not_tradable'").fetchone()[0]
+    assert (active, events) == (False, 1)
+
+@pytest.mark.parametrize("reason", ["insufficient buying power", "account is not active for trading"])
+def test_other_rejections_leave_the_ticker_on(conn, alerts, reason):
+    """Switch a ticker off only when the message is about the asset, not the account"""
+    broker = FakeBroker(conn, sends=[OrderRejected(reason)])
+
+    place(conn, broker, buy_request(conn))
+
+    assert conn.execute("SELECT is_active FROM tickers WHERE ticker = 'AAPL'").fetchone()[0] == True
+
 def test_no_answer_then_not_found_resends_with_same_id(conn, alerts):
     """After a timeout, look the order up; if Alpaca doesn't have it, send again with the same ID"""
     broker = FakeBroker(conn, sends=[BrokerUnavailable("read timed out"), accepted_buy()], lookups=[None])

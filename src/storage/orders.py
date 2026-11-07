@@ -9,9 +9,11 @@ from decimal import Decimal
 
 #Local Imports
 from logger import db_log
+from storage.fills import FINAL_STATUSES
 
 REJECT_REASON_LENGTH = 256
 STUCK_STATUSES = ("submitting", "unknown")
+DONE_STATUSES = FINAL_STATUSES + ("not_sent",)
 
 def _check_one_row(cursor, order_id: int):
     """Raise if an update didn't change exactly one order"""
@@ -155,3 +157,44 @@ def get_stuck_orders(conn, before: datetime) -> list:
     return [{"order_id": row.order_id, "client_order_id": row.client_order_id, "status": row.status,
              "strategy_id": row.strategy_id, "ticker_id": row.ticker_id, "signal_id": row.signal_id}
             for row in cursor.fetchall()]
+
+def get_open_orders(conn) -> list:
+    """Return every order that isn't done yet, leaving out bracket legs
+
+    "Not done" = any status but DONE_STATUSES, so "submitting" and "unknown" count (they may be at Alpaca).
+    Legs are left out: they wait for as long as their position is open, and E3 cancels them before a sell.
+
+    Parameters:
+        conn (Connection): An open database connection
+
+    Returns:
+        A list of {"strategy_id", "ticker", "side"}, one per order
+    """
+    placeholders = ", ".join("?" * len(DONE_STATUSES))
+    rows = conn.cursor().execute(
+        "SELECT o.strategy_id, t.ticker, o.side FROM orders o JOIN tickers t ON t.ticker_id = o.ticker_id "
+        f"WHERE o.parent_order_id IS NULL AND o.[status] NOT IN ({placeholders})",
+        DONE_STATUSES,
+    ).fetchall()
+    return [{"strategy_id": row.strategy_id, "ticker": row.ticker, "side": row.side} for row in rows]
+
+def get_pending_buys(conn) -> list:
+    """Return the buy orders not done yet with shares still to fill, for risk's exposure
+
+    Parameters:
+        conn (Connection): An open database connection
+
+    Returns:
+        A list of {"strategy_id", "ticker", "unfilled", "request_price", "position_id"}; request_price is
+        None for an order the bot didn't size (a manual trade)
+    """
+    placeholders = ", ".join("?" * len(DONE_STATUSES))
+    rows = conn.cursor().execute(
+        "SELECT o.strategy_id, t.ticker, o.requested_quantity - o.filled_quantity AS unfilled, o.request_price, "
+        "o.position_id FROM orders o JOIN tickers t ON t.ticker_id = o.ticker_id "
+        f"WHERE o.side = 'buy' AND o.filled_quantity < o.requested_quantity AND o.[status] NOT IN ({placeholders}) "
+        "ORDER BY o.order_id",
+        DONE_STATUSES,
+    ).fetchall()
+    return [{"strategy_id": row.strategy_id, "ticker": row.ticker, "unfilled": row.unfilled,
+             "request_price": row.request_price, "position_id": row.position_id} for row in rows]

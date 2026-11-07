@@ -46,8 +46,10 @@ ACTIVITY_PAGE_SIZE = 100
 
 MARKET_DATA_PLAN = "delayed"
 MARKET_DATA_PROFILES = {
-    "delayed": {"feed": "sip", "lag_minutes": 15, "min_time_frame_minutes": 15},
-    "live": {"feed": "sip", "lag_minutes": 0,  "min_time_frame_minutes": 1},
+    "delayed": {"feed": "sip", "lag_minutes": 15, "min_time_frame_minutes": 15, "price_feed": "iex",
+                "max_price_age_seconds": 120},
+    "live": {"feed": "sip", "lag_minutes": 0,  "min_time_frame_minutes": 1, "price_feed": "sip",
+             "max_price_age_seconds": 60},
 }
 PRICE_ADJUSTMENT = "split"
 SEED_TOLERANCE = 0.01
@@ -81,3 +83,10 @@ MAX_ORDER_FRACTION = 0.20
 DAILY_HALT_LIMITS = {"day": {"loss": 0.03, "profit": 0.10}}
 KILL_SWITCH_FRACTION = 0.05
 RISK_EQUITY_CAP = {"PAPER": 1000, "LIVE": None}
+LAST_BUY_MINUTES_BEFORE_CLOSE = {"day": 30}
+MAX_PRICE_MOVE_OF_STOP = 0.5
+SKIP_PRIORITY = ("shadow", "strategy_off", "kill_switch", "audit_mismatch", "drawdown_limit", "daily_halt",
+                 "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",
+                 "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "invalid_exit_prices",
+                 "market_closed", "too_late_to_buy", "not_tradable", "open_order", "stale_price", "price_moved",
+                 "nothing_to_sell")

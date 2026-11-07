@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 #Local Imports
 from config.constants import UNKNOWN_ORDER_WAIT_SECONDS
+from data.market_calendar import NEW_YORK
 from logger import trades_log
 from storage.connections import is_duplicate_error
 from storage.fills import (add_to_position, close_position, find_order_row, get_entry_defaults,
@@ -19,7 +20,6 @@ from storage.fills import (add_to_position, close_position, find_order_row, get_
 from storage.orders import insert_order, save_rejection
 from storage.watchlist import get_or_create_ticker
 
-NEW_YORK = ZoneInfo("America/New_York")
 MANUAL = "manual"
 LATE_REJECTION = "Rejected by Alpaca after it was accepted (the stream gives no reason)"
 
@@ -37,7 +37,7 @@ class HandleResult:
 
 def _new_york_date(utc_time: datetime):
     """Return the New York date of a naive UTC time"""
-    return utc_time.replace(tzinfo=timezone.utc).astimezone(NEW_YORK).date()
+    return utc_time.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(NEW_YORK)).date()
 
 def _record_manual_order(conn, update) -> dict:
     """Save an order the bot didn't place under the manual strategy and return its row"""

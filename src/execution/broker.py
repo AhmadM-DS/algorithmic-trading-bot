@@ -11,8 +11,8 @@ from decimal import Decimal
 #Third Party Libraries
 import requests
 from alpaca.common.exceptions import APIError
-from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
-from alpaca.trading.requests import (GetOrderByIdRequest, MarketOrderRequest, StopLossRequest,
+from alpaca.trading.enums import AssetClass, AssetStatus, OrderClass, OrderSide, TimeInForce
+from alpaca.trading.requests import (GetAssetsRequest, GetOrderByIdRequest, MarketOrderRequest, StopLossRequest,
                                      TakeProfitRequest)
 
 #Local Imports
@@ -272,6 +272,22 @@ class AlpacaBroker:
         except OrderRejected as error:
             raise BrokerUnavailable(f"Positions lookup refused: {error}") from error
         return {position.symbol: int(_to_decimal(position.qty)) for position in positions}
+
+    def get_tradable_tickers(self) -> set:
+        """Return every US stock Alpaca can trade right now (one call, a few thousand symbols)
+
+        Returns:
+            A set of ticker symbols
+
+        Raises:
+            BrokerUnavailable if Alpaca can't be asked
+        """
+        request = GetAssetsRequest(status=AssetStatus.ACTIVE, asset_class=AssetClass.US_EQUITY)
+        try:
+            assets = self._call(self.client.get_all_assets, request)
+        except OrderRejected as error:
+            raise BrokerUnavailable(f"Asset lookup refused: {error}") from error
+        return {asset.symbol for asset in assets if asset.tradable}
 
     def cancel_order(self, alpaca_order_id: str):
         """Cancel one open order
