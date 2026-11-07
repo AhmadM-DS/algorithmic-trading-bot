@@ -43,7 +43,7 @@ def record_risk_events(conn, context: RiskContext, alert_channels: dict = None) 
 def save_risk_decision(conn, signal_id: int, request: RiskRequest, decision: Decision, context: RiskContext) -> int:
     """Save what risk knew when it decided a signal, with every parameter it used
 
-    Called once the signal is saved (Phase 6). Doesn't commit, so the signal and its decision commit together.
+    Called once the signal is saved. Doesn't commit, so the signal and its decision commit together.
 
     Parameters:
         conn (Connection): An open database connection
@@ -61,7 +61,7 @@ def save_risk_decision(conn, signal_id: int, request: RiskRequest, decision: Dec
         conn, signal_id, sizer=decision.sizer, sized_quantity=decision.sized_quantity, equity=context.equity,
         buying_power=context.buying_power, trading_budget=state.trading_budget,
         account_exposure=context.exposure(), strategy_exposure=context.exposure(strategy_id=request.strategy_id),
-        ticker_exposure=context.exposure(ticker=ticker), open_positions=len(context.positions()),
+        ticker_exposure=context.exposure(ticker=ticker), open_positions=context.position_count(),
         shares_held=context.shares_held(request.strategy_id, ticker), broker_shares=context.broker_shares(ticker),
         strategy_daily_pnl=state.pnl_today(request.signal.holding_type), strategy_drawdown=state.drawdown,
         account_daily_change=context.account_daily_change, start_equity=context.start_equity)

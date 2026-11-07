@@ -217,3 +217,12 @@ def test_halts_never_block_a_sell():
     decision = decide(_request(side="sell"), context)
 
     assert decision.approved_quantity == 5
+
+def test_buys_in_one_cycle_share_the_budget():
+    """Fill the $250 budget with five $50 buys in one cycle; the sixth is skipped, not approved on the same snapshot"""
+    context = _context()
+    for ticker in ("AAPL", "AMD", "TSLA", "NVDA", "META"):
+        decision = decide(_request(ticker=ticker), context)
+        context = context.with_pending_buy(LIVE, ticker, decision.approved_quantity, 10.0)
+
+    assert decide(_request(ticker="MSFT"), context).skip_reason == "budget_exhausted"

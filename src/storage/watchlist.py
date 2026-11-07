@@ -116,3 +116,34 @@ def get_inactive_tickers(conn):
     cursor = conn.cursor()
     cursor.execute("SELECT ticker FROM tickers WHERE is_active = 0")
     return {row[0] for row in cursor.fetchall()}
+
+def get_ticker_states(conn) -> dict:
+    """Return whether every saved ticker is marked tradable
+
+    Parameters:
+        conn (Connection): An open database connection
+
+    Returns:
+        {ticker: True if is_active = 1}
+    """
+    rows = conn.cursor().execute("SELECT ticker, is_active FROM tickers").fetchall()
+    return {row.ticker: bool(row.is_active) for row in rows}
+
+def set_ticker_active(conn, ticker: str, active: bool):
+    """Mark a ticker tradable or not (is_active); fill_override, the admin's switch, is never touched
+
+    Doesn't commit.
+
+    Parameters:
+        conn (Connection): An open database connection
+        ticker (str): The ticker symbol
+        active (bool): True if Alpaca can trade it
+
+    Raises:
+        LookupError if the ticker isn't saved
+    """
+    cursor = conn.cursor()
+    cursor.execute("UPDATE tickers SET is_active = ? WHERE ticker = ?", (active, ticker))
+    if cursor.rowcount != 1:
+        raise LookupError(f"Expected 1 ticker named {ticker!r}, updated {cursor.rowcount}")
+    db_log.info(f"tickers: {ticker} is_active = {int(active)}")

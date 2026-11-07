@@ -13,14 +13,15 @@ import pyodbc
 
 #Local Imports
 from config.constants import DAILY_HALT_LIMITS, KILL_SWITCH_FRACTION, MAX_LEVERAGE, RISK_EQUITY_CAP
+from data.market_calendar import NEW_YORK
 from execution.broker import BrokerError
-from risk.context import BrokerPosition, OpenPosition, RecentExit, RiskContext, RiskEvent, StrategyState
+from risk.context import BrokerPosition, OpenPosition, PendingBuy, RecentExit, RiskContext, RiskEvent, StrategyState
 from risk.parameters import get_parameter
+from storage.orders import get_pending_buys
 from storage.risk import (get_daily_pnl, get_events_since, get_events_since_budget_set, get_exits_since,
                           get_latest_events, get_open_positions, get_pnl_since_budget, get_previous_parameters,
                           get_strategy_rows)
 
-NEW_YORK = ZoneInfo("America/New_York")
 KILL_SWITCH = "kill_switch"
 DRAWDOWN_LIMIT = "drawdown_limit"
 SCALE_DOWN_STARTED = "scale_down_started"
@@ -51,8 +52,8 @@ def start_of_day(now: datetime) -> datetime:
     Returns:
         A naive UTC datetime
     """
-    today = now.astimezone(NEW_YORK).date()
-    return datetime.combine(today, time(0), NEW_YORK).astimezone(timezone.utc).replace(tzinfo=None)
+    today = now.astimezone(ZoneInfo(NEW_YORK)).date()
+    return datetime.combine(today, time(0), ZoneInfo(NEW_YORK)).astimezone(timezone.utc).replace(tzinfo=None)
 
 def _capped(value: float, cap: float | None) -> float:
     """Return value limited to the equity cap; None means no cap"""
@@ -83,7 +84,7 @@ def _base_context(conn, broker, now: datetime, trading_mode: str) -> RiskContext
     cap = RISK_EQUITY_CAP[trading_mode]
     equity = _capped(float(account.equity), cap)
     day_start = start_of_day(now)
-    trade_date = now.astimezone(NEW_YORK).date()
+    trade_date = now.astimezone(ZoneInfo(NEW_YORK)).date()
 
     rows = get_strategy_rows(conn)
     live_budgets = sum(float(row["budget"]) for row in rows if row["mode"] == "live")
@@ -108,13 +109,17 @@ def _base_context(conn, broker, now: datetime, trading_mode: str) -> RiskContext
         RecentExit(strategy_id=row["strategy_id"], ticker=row["ticker"], exit_reason=row["exit_reason"],
                    closed_at=_utc(row["closed_at"]))
         for row in get_exits_since(conn, day_start))
+    pending = tuple(
+        PendingBuy(strategy_id=row["strategy_id"], ticker=row["ticker"], quantity=row["unfilled"],
+                   price=float(row["request_price"] or 0), has_position=row["position_id"] is not None)
+        for row in get_pending_buys(conn))
 
     return RiskContext(as_of=now, equity=equity, buying_power=float(account.buying_power), strategies=strategies,
                        open_positions=positions, recent_exits=exits,
                        broker_positions=tuple(BrokerPosition(ticker, shares) for ticker, shares in held.items()),
                        account_daily_change=float(account.equity - account.last_equity),
                        start_equity=_capped(float(account.last_equity), cap), scale_down=scale,
-                       previous_parameters=get_previous_parameters(conn, day_start))
+                       previous_parameters=get_previous_parameters(conn, day_start), pending_buys=pending)
 
 def _kill_switch(context: RiskContext, locked: bool, events: list) -> bool:
     """Return whether the kill switch is on; add an event the first time it trips today"""

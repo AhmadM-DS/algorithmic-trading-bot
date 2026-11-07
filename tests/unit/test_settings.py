@@ -114,7 +114,12 @@ def test_every_market_data_plan_loads():
 def test_profiles_have_required_keys():
     """Tests that every profile has the values the data module reads"""
     for profile in MARKET_DATA_PROFILES.values():
-        assert {"feed", "lag_minutes", "min_time_frame_minutes"} <= profile.keys()
+        assert {"feed", "lag_minutes", "min_time_frame_minutes", "price_feed", "max_price_age_seconds"} <= profile.keys()
+
+def test_profiles_check_prices_against_a_saveable_feed():
+    """Tests that every plan's price check uses a feed order_reviews accepts and a positive age limit"""
+    for profile in MARKET_DATA_PROFILES.values():
+        assert profile["price_feed"] in ("sip", "iex") and profile["max_price_age_seconds"] > 0
 
 def test_unknown_market_data_plan():
     """Tests that a misspelled plan stops startup"""

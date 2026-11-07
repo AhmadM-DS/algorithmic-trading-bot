@@ -10,12 +10,11 @@ from zoneinfo import ZoneInfo
 
 #Local Imports
 from config.constants import CATCH_UP_MARGIN_SECONDS, UNKNOWN_ORDER_WAIT_SECONDS
+from data.market_calendar import NEW_YORK
 from fills.events import from_activity, from_broker_order, from_saved
 from fills.handler import process_update
 from logger import trades_log
 from storage.fills import fill_seen, get_last_event_time, get_open_orders, get_unhandled_fills, trade_exists
-
-NEW_YORK = ZoneInfo("America/New_York")
 
 @dataclass
 class CatchUpResult:
@@ -45,8 +44,8 @@ def catch_up_start(conn, now: datetime, margin_seconds: int = CATCH_UP_MARGIN_SE
     last = get_last_event_time(conn)
     if last is not None:
         return last - timedelta(seconds=margin_seconds)
-    today = now.replace(tzinfo=timezone.utc).astimezone(NEW_YORK).date()
-    return datetime.combine(today, time(0), NEW_YORK).astimezone(timezone.utc).replace(tzinfo=None)
+    today = now.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(NEW_YORK)).date()
+    return datetime.combine(today, time(0), ZoneInfo(NEW_YORK)).astimezone(timezone.utc).replace(tzinfo=None)
 
 def retry_unhandled(conn, now: datetime, wait_seconds: int = UNKNOWN_ORDER_WAIT_SECONDS) -> list:
     """Handle again every saved fill that has no trades row yet

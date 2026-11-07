@@ -13,7 +13,7 @@ from uuid import UUID
 import pytest
 import requests
 from alpaca.common.exceptions import APIError
-from alpaca.trading.models import Order, Position, TradeAccount
+from alpaca.trading.models import Asset, Order, Position, TradeAccount
 
 #Local Imports
 from config.constants import ALPACA_TIMEOUT_SECONDS
@@ -84,6 +84,10 @@ class FakeTradingClient:
 
     def get_all_positions(self):
         self.calls.append(("get_all_positions",))
+        return self._respond(self.error)
+
+    def get_all_assets(self, request=None):
+        self.calls.append(("get_all_assets", request.to_request_fields() if request else None))
         return self._respond(self.error)
 
     def get(self, path, params):
@@ -381,3 +385,25 @@ def test_get_positions_is_empty_when_nothing_is_held():
     positions = AlpacaBroker(FakeTradingClient(answer=[])).get_positions()
 
     assert positions == {}
+
+def asset(symbol, tradable=True):
+    """Build an alpaca-py Asset the way Alpaca's assets endpoint returns it"""
+    return Asset(id=UUID("904837e3-3b76-47ec-b432-046db621571b"), **{"class": "us_equity"}, exchange="NASDAQ",
+                 symbol=symbol, name=symbol, status="active", tradable=tradable, marginable=True, shortable=True,
+                 easy_to_borrow=True, fractionable=True)
+
+def test_get_tradable_tickers_returns_only_tradable_symbols():
+    """Ask once for active US stocks and keep the ones Alpaca can trade"""
+    client = FakeTradingClient(answer=[asset("AAPL"), asset("ZZZQ", tradable=False), asset("SPY")])
+
+    tradable = AlpacaBroker(client).get_tradable_tickers()
+
+    assert tradable == {"AAPL", "SPY"}
+    assert client.calls == [("get_all_assets", {"status": "active", "asset_class": "us_equity"})]
+
+def test_get_tradable_tickers_raises_when_alpaca_cant_be_asked():
+    client = FakeTradingClient(error=requests.exceptions.Timeout("read timed out"))
+
+    with pytest.raises(BrokerUnavailable):
+        AlpacaBroker(client).get_tradable_tickers()
+

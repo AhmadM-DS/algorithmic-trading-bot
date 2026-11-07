@@ -17,6 +17,7 @@ from logger import trades_log
 from notifications import send_critical
 from storage.orders import (get_stuck_orders, insert_order, save_broker_answer, save_rejection,
                             set_order_status)
+from watchlist.tradable import is_not_tradable_rejection, mark_not_tradable
 
 CENT = Decimal("0.01")
 SUB_PENNY = Decimal("0.0001")
@@ -230,6 +231,8 @@ def place_order(request: OrderRequest, conn, broker, now: datetime | None = None
         answer = _submit_with_retries(send, broker, client_order_id, waits, sleep)
     except OrderRejected as error:
         save_rejection(conn, order_id, str(error))
+        if is_not_tradable_rejection(str(error)):
+            mark_not_tradable(conn, request.ticker, str(error))
         conn.commit()
         trades_log.warning(f"Rejected {client_order_id}: {error}")
         send_critical(f"Order rejected: {request.strategy} {request.side} {request.quantity} {request.ticker}. "

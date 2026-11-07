@@ -4,13 +4,14 @@ Unit tests for the RiskContext snapshot and its records
 """
 
 #Standard Library
+from dataclasses import replace
 from datetime import datetime, timezone
 
 #Third Party Libraries
 import pytest
 
 #Local Imports
-from risk.context import BrokerPosition, OpenPosition, RecentExit, RiskContext, StrategyState
+from risk.context import BrokerPosition, OpenPosition, PendingBuy, RecentExit, RiskContext, StrategyState
 
 UTC_NOW = datetime(2026, 10, 27, 14, 15, tzinfo=timezone.utc)
 """A fixed UTC time so no test depends on the clock"""
@@ -238,3 +239,29 @@ def test_new_snapshot_fields_default_to_no_halts():
     defaults = (CONTEXT.kill_switch, CONTEXT.scale_down, CONTEXT.events, CONTEXT.strategy(MOMENTUM).drawdown_paused)
 
     assert defaults == (False, 1.0, (), False)
+
+def test_pending_buy_adds_its_unfilled_cost_to_exposure():
+    """Count a sent-but-unfilled buy's money against the strategy, the ticker and the account"""
+    context = replace(CONTEXT, pending_buys=(PendingBuy(strategy_id=MOMENTUM, ticker="AMD", quantity=4, price=12.5),))
+
+    assert (context.exposure(MOMENTUM, "AMD"), context.exposure() - CONTEXT.exposure()) == (50.0, 50.0)
+
+def test_pending_buy_without_a_fill_counts_as_a_position():
+    """Count a buy on its way as a position, so two quick buys can't pass the position limits"""
+    context = replace(CONTEXT, pending_buys=(PendingBuy(strategy_id=MOMENTUM, ticker="AMD", quantity=4, price=12.5),))
+
+    assert (context.position_count(), context.position_count(MOMENTUM, "AMD")) == (5, 1)
+
+def test_partly_filled_buy_isnt_counted_twice():
+    """Leave out a pending buy that already has its position (the filled part is that position)"""
+    context = replace(CONTEXT, pending_buys=(
+        PendingBuy(strategy_id=MOMENTUM, ticker="TSLA", quantity=2, price=250.0, has_position=True),))
+
+    assert (context.position_count(MOMENTUM, "TSLA"), context.exposure(MOMENTUM, "TSLA")) == (1, 750.0)
+
+def test_with_pending_buy_returns_a_new_snapshot():
+    """Add an approved buy to a copy, leaving the original snapshot as it was"""
+    added = CONTEXT.with_pending_buy(MOMENTUM, "AMD", 4, 12.5)
+
+    assert (len(added.pending(MOMENTUM, "AMD")), len(CONTEXT.pending_buys)) == (1, 0)
+
