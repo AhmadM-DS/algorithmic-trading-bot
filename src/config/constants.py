@@ -84,6 +84,9 @@ DAILY_HALT_LIMITS = {"day": {"loss": 0.03, "profit": 0.10}}
 KILL_SWITCH_FRACTION = 0.05
 RISK_EQUITY_CAP = {"PAPER": 1000, "LIVE": None}
 LAST_BUY_MINUTES_BEFORE_CLOSE = {"day": 30}
+END_OF_DAY_CLOSE_MINUTES = {"day": 10}
+CANCEL_WAIT_SECONDS = 10
+CLOSING_ALERT_MINUTES = 3
 MAX_PRICE_MOVE_OF_STOP = 0.5
 SKIP_PRIORITY = ("shadow", "strategy_off", "kill_switch", "audit_mismatch", "drawdown_limit", "daily_halt",
                  "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",

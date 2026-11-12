@@ -5,13 +5,12 @@ Build the OrderFacts once per cycle from the trading calendar, the database and 
 
 #Standard Library
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 #Third Party Libraries
 import pyodbc
 
 #Local Imports
-from data.market_calendar import NEW_YORK
+from data.market_calendar import session_times
 from data.prices import PriceUnavailable, get_latest_trades
 from logger import trades_log
 from order_review.facts import OpenOrder, OrderFacts, TradePrice
@@ -20,13 +19,6 @@ from storage.watchlist import get_inactive_tickers
 
 class OrderFactsUnavailable(Exception):
     """The database didn't answer, so there are no facts and no orders this cycle"""
-
-def _session(calendar: dict, now: datetime) -> tuple:
-    """Return today's (open, close) as datetimes, or (None, None) when the market doesn't open today"""
-    day = calendar.get(now.astimezone(ZoneInfo(NEW_YORK)).date())
-    if day is None:
-        return None, None
-    return day["open"].to_pydatetime(), day["close"].to_pydatetime()
 
 def build_order_facts(conn, data_client, now: datetime, calendar: dict, tickers: list, profile: dict) -> OrderFacts:
     """Return this cycle's facts for the pre-order checks
@@ -65,7 +57,7 @@ def build_order_facts(conn, data_client, now: datetime, calendar: dict, tickers:
             prices_available = False
             trades_log.warning(f"No latest prices this cycle; every buy is skipped as stale_price: {error}")
 
-    session_open, session_close = _session(calendar, now)
+    session_open, session_close = session_times(calendar, now)
     return OrderFacts(as_of=now, session_open=session_open, session_close=session_close,
                       price_feed=profile["price_feed"], max_price_age_seconds=profile["max_price_age_seconds"],
                       latest_trades=trades, inactive_tickers=inactive, open_orders=open_orders,
