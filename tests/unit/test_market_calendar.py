@@ -1,9 +1,11 @@
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
-from data.market_calendar import get_calendar, last_trading_day, trading_days_between, SESSION_TIME_FRAMES
+from data.market_calendar import (get_calendar, last_trading_day, session_times, trading_days_between,
+                                  SESSION_TIME_FRAMES)
 from data.time_frames import TIME_FRAMES, candle_end
 
 def utc(year, month, day, hour, minute=0):
@@ -95,3 +97,18 @@ def test_trading_days_between_includes_both_ends(calendar):
 
 def test_trading_days_between_no_trading_days(calendar):
     assert trading_days_between(date(2026, 11, 28), date(2026, 11, 29), calendar) == []
+
+def test_session_times_uses_the_new_york_date():
+    """Find Monday's session at 8 PM New York, which is already Tuesday in UTC"""
+    calendar = {date(2026, 11, 9): {"open": pd.Timestamp("2026-11-09 14:30", tz="UTC"),
+                                    "close": pd.Timestamp("2026-11-09 21:00", tz="UTC")}}
+
+    session_open, session_close = session_times(calendar, datetime(2026, 11, 10, 1, 0, tzinfo=timezone.utc))
+
+    assert (session_open, session_close) == (datetime(2026, 11, 9, 14, 30, tzinfo=timezone.utc),
+                                             datetime(2026, 11, 9, 21, 0, tzinfo=timezone.utc))
+
+def test_session_times_on_a_closed_day_is_none():
+    """Return no session on a day missing from the calendar (a weekend or holiday)"""
+
+    assert session_times({}, datetime(2026, 11, 8, 15, 0, tzinfo=timezone.utc)) == (None, None)

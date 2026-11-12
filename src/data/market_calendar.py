@@ -4,7 +4,8 @@ Trading days with their real open and close times, from Alpaca's market calendar
 """
 
 #Standard Library
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 #Third Party Libraries
 from alpaca.trading.requests import GetCalendarRequest
@@ -36,6 +37,21 @@ def get_calendar(trading_client, start: date, end: date) -> dict:
         close_time = pd.Timestamp(day.close).tz_localize(NEW_YORK).tz_convert("UTC")
         calendar[day.date] = {"open": open_time, "close": close_time}
     return calendar
+
+def session_times(calendar: dict, now: datetime) -> tuple:
+    """Return today's regular open and close, picking "today" by the New York date
+
+    Parameters:
+        calendar (dict): Trading days from get_calendar
+        now (datetime): The real time now, timezone-aware
+
+    Returns:
+        (open, close) as UTC datetimes, or (None, None) when the market doesn't open today
+    """
+    day = calendar.get(now.astimezone(ZoneInfo(NEW_YORK)).date())
+    if day is None:
+        return None, None
+    return day["open"].to_pydatetime(), day["close"].to_pydatetime()
 
 def last_trading_day(candle_start: date, time_frame: str, calendar: dict) -> date:
     """Return the last trading day inside a session candle's period
