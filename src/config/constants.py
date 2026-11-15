@@ -88,6 +88,9 @@ END_OF_DAY_CLOSE_MINUTES = {"day": 10}
 CANCEL_WAIT_SECONDS = 10
 CLOSING_ALERT_MINUTES = 3
 MAX_PRICE_MOVE_OF_STOP = 0.5
+RECONCILIATION_WAIT_SECONDS = 300
+RECONCILIATION_REPEAT_MINUTES = 60
+RECONCILIATION_FAILED_CHECKS = 3
 SKIP_PRIORITY = ("shadow", "strategy_off", "kill_switch", "audit_mismatch", "drawdown_limit", "daily_halt",
                  "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",
                  "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "invalid_exit_prices",

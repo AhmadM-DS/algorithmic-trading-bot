@@ -46,6 +46,22 @@ def check_kill_switch(request: RiskRequest, context: RiskContext, quantity: int)
     """
     return "kill_switch" if context.kill_switch else None
 
+def check_audit_mismatch(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
+    """Block buys of a ticker whose shares at Alpaca and in the database differ, until they match again
+
+    The block starts the first cycle the counts differ, before reconciliation records or alerts anything, so a
+    fill the database hasn't saved yet also holds that ticker's buys for a moment.
+
+    Parameters:
+        request (RiskRequest): The buy being checked
+        context (RiskContext): This cycle's snapshot
+        quantity (int): The sizer's share count
+
+    Returns:
+        "audit_mismatch" if the ticker's counts differ, None otherwise
+    """
+    return "audit_mismatch" if request.signal.ticker in context.share_mismatches else None
+
 def check_drawdown(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
     """Block a strategy's buys once it has fallen its drawdown limit below its peak, until the admin re-sets its budget
 
