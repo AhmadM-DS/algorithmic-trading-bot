@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 import pytest
 
 #Local Imports
-from risk import BrokerPosition, OpenPosition, RecentExit, RiskContext, RiskRequest, StrategyState, decide
+from risk import (BrokerPosition, OpenPosition, RecentExit, RiskContext, RiskRequest, ShareCounts, StrategyState,
+                  decide)
 from strategies.signals import Signal
 
 LIVE = 3
@@ -205,6 +206,28 @@ def test_kill_switch_skips_buys():
     decision = decide(_request(), halted)
 
     assert decision.skip_reason == "kill_switch"
+
+def test_share_mismatch_skips_buys_of_that_ticker():
+    """Skip a buy with "audit_mismatch" while its ticker's counts differ, ranked right after the kill switch"""
+    context = _context()
+    blocked = RiskContext(as_of=context.as_of, equity=context.equity, buying_power=context.buying_power,
+                          strategies=context.strategies, open_positions=(), recent_exits=(), broker_positions=(),
+                          kill_switch=True, share_mismatches={"AAPL": ShareCounts(alpaca=5, database=0)})
+
+    decision = decide(_request(), blocked)
+
+    assert decision.failed_checks[:2] == ("kill_switch", "audit_mismatch")
+
+def test_share_mismatch_never_blocks_a_sell():
+    """Sell a mismatched ticker, capped by both counts, so a mismatch can never trap a position"""
+    context = RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=1000.0, strategies=_context().strategies,
+                          open_positions=(_held(LIVE, "AAPL", 5, 10.0),), recent_exits=(),
+                          broker_positions=(BrokerPosition(ticker="AAPL", shares=3),),
+                          share_mismatches={"AAPL": ShareCounts(alpaca=3, database=5)})
+
+    decision = decide(_request(side="sell"), context)
+
+    assert (decision.approved_quantity, decision.skip_reason) == (3, None)
 
 def test_halts_never_block_a_sell():
     """Sell during a kill switch, a daily halt and a drawdown pause: halts never trap a position"""

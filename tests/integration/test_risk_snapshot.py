@@ -11,7 +11,7 @@ import pytest
 
 #Local Imports
 from fill_samples import CommitCounter
-from risk import RiskRequest, RiskStateUnavailable, build_context, decide, record_risk_events, save_risk_decision
+from risk import RiskRequest, ShareCounts, RiskStateUnavailable, build_context, decide, record_risk_events, save_risk_decision
 from risk_samples import (FakeBroker, add_event, add_strategy, add_used_parameter, as_admin, aware, closed_position,
                           db_now, events, open_position, add_signal)
 from strategies.signals import Signal
@@ -336,3 +336,32 @@ def test_risk_decision_saves_every_parameter_used(conn):
                         decision_id).fetchall()
     assert [(row.name, row.used) for row in rows] == \
            [("cooldown_stop_loss", 2.0), ("drawdown_limit", 0.05), ("position_fraction", 0.2)]
+
+def manual_strategy(conn):
+    return conn.execute("SELECT strategy_id FROM strategies WHERE strategy = 'manual'").fetchone()[0]
+
+def test_snapshot_finds_a_share_mismatch(conn):
+    """Put a ticker in share_mismatches when Alpaca holds fewer shares than the open positions"""
+    open_position(conn, add_strategy(conn), shares=5)
+
+    context = build(conn, FakeBroker(positions={"AAPL": 3}))
+
+    assert context.share_mismatches == {"AAPL": ShareCounts(alpaca=3, database=5)}
+
+def test_snapshot_counts_manual_positions_toward_the_ticker(conn):
+    """Add a manual position to the bot's in the same ticker, so 5 + 2 matches Alpaca's 7"""
+    open_position(conn, add_strategy(conn), shares=5)
+    open_position(conn, manual_strategy(conn), shares=2, number=2)
+
+    context = build(conn, FakeBroker(positions={"AAPL": 7}))
+
+    assert context.share_mismatches == {}
+
+def test_mismatched_ticker_buy_is_skipped_through_the_front_door(conn):
+    """Skip a buy of a ticker Alpaca holds but the database doesn't, with "audit_mismatch" """
+    strategy_id = add_strategy(conn)
+    context = build(conn, FakeBroker(positions={"AAPL": 4}))
+
+    decision = decide(buy(strategy_id), context)
+
+    assert decision.skip_reason == "audit_mismatch"

@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 #Local Imports
 from risk.context import OpenPosition, RecentExit, RiskContext, StrategyState
 from risk.decisions import RiskRequest
-from risk.guardrails import (check_budget, check_buying_power, check_daily_halt, check_drawdown, check_kill_switch,
+from audit import ShareCounts
+from risk.guardrails import (check_audit_mismatch, check_budget, check_buying_power, check_daily_halt, check_drawdown, check_kill_switch,
                              check_leverage, check_max_positions, check_mode, check_cooldown, check_order_size,
                              check_positions_per_ticker, check_quantity, check_ticker_exposure, cooldown_parameter)
 from strategies.signals import Signal
@@ -346,6 +347,22 @@ def test_kill_switch_off_passes():
     """Let a buy through on a normal day"""
 
     reason = check_kill_switch(_buy(), _context(), 5)
+
+    assert reason is None
+
+def test_share_mismatch_blocks_buys_of_that_ticker():
+    """Block a buy with "audit_mismatch" while its ticker's shares at Alpaca and in the database differ"""
+    context = _context(share_mismatches={"AAPL": ShareCounts(alpaca=70, database=100)})
+
+    reason = check_audit_mismatch(_buy("AAPL"), context, 5)
+
+    assert reason == "audit_mismatch"
+
+def test_share_mismatch_leaves_other_tickers_alone():
+    """Let a buy of another ticker through: the block is per ticker"""
+    context = _context(share_mismatches={"ABC": ShareCounts(alpaca=70, database=100)})
+
+    reason = check_audit_mismatch(_buy("AAPL"), context, 5)
 
     assert reason is None
 

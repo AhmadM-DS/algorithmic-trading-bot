@@ -128,7 +128,8 @@ class RiskContext:
     dollars); start_equity is the capped last_equity, the kill switch's base. scale_down is the factor every
     live budget was multiplied by (1.0 when the account covers them). previous_parameters holds the last value
     used before today for each (strategy_id, name). events are the states that started this cycle. pending_buys
-    are buy orders not filled yet; exposure and position counts include them.
+    are buy orders not filled yet; exposure and position counts include them. share_mismatches holds every ticker
+    whose shares at Alpaca and in the database differ this cycle ({ticker: ShareCounts}); their buys are blocked.
     """
     as_of: datetime
     equity: float
@@ -144,6 +145,7 @@ class RiskContext:
     previous_parameters: dict = field(default_factory=dict)
     events: tuple[RiskEvent, ...] = ()
     pending_buys: tuple[PendingBuy, ...] = ()
+    share_mismatches: dict = field(default_factory=dict)
 
     def __post_init__(self):
         """Reject a naive as_of time"""

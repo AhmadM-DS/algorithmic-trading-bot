@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import pyodbc
 
 #Local Imports
+from audit.shares import compare_shares, database_shares
 from config.constants import DAILY_HALT_LIMITS, KILL_SWITCH_FRACTION, MAX_LEVERAGE, RISK_EQUITY_CAP
 from data.market_calendar import NEW_YORK
 from execution.broker import BrokerError
@@ -119,7 +120,8 @@ def _base_context(conn, broker, now: datetime, trading_mode: str) -> RiskContext
                        broker_positions=tuple(BrokerPosition(ticker, shares) for ticker, shares in held.items()),
                        account_daily_change=float(account.equity - account.last_equity),
                        start_equity=_capped(float(account.last_equity), cap), scale_down=scale,
-                       previous_parameters=get_previous_parameters(conn, day_start), pending_buys=pending)
+                       previous_parameters=get_previous_parameters(conn, day_start), pending_buys=pending,
+                       share_mismatches=compare_shares(held, database_shares(positions)))
 
 def _kill_switch(context: RiskContext, locked: bool, events: list) -> bool:
     """Return whether the kill switch is on; add an event the first time it trips today"""
