@@ -21,12 +21,14 @@ BUILD_FILES = [SQL_DIR / "migrations" / "001_initial_schema.sql",
                SQL_DIR / "migrations" / "007_order_exit_reason.sql",
                SQL_DIR / "migrations" / "008_risk_snapshot_columns.sql",
                SQL_DIR / "migrations" / "009_order_reviews.sql",
+               SQL_DIR / "migrations" / "010_claude_reader.sql",
                SQL_DIR / "views.sql"]
 
 # Never read from .env: this database gets dropped on every run.
 TEST_DB = "noctis_test"
 TEST_SERVER = os.environ.get("TEST_DB_SERVER", r"localhost\SQLEXPRESS")
 TEST_BOT_USER = "test_bot"
+TEST_READER_USER = "test_claude_reader"
 
 def split_batches(sql_text):
     """Read a sql file and split where 'GO' is found to avoid conflictions"""
@@ -84,6 +86,8 @@ def test_db():
             run_batch(cursor, batch)
     run_batch(cursor, f"CREATE USER {TEST_BOT_USER} WITHOUT LOGIN;")
     run_batch(cursor, f"ALTER ROLE bot_role ADD MEMBER {TEST_BOT_USER};")
+    run_batch(cursor, f"CREATE USER {TEST_READER_USER} WITHOUT LOGIN;")
+    run_batch(cursor, f"ALTER ROLE claude_reader_role ADD MEMBER {TEST_READER_USER};")
     conn.close()
     yield TEST_DB
 
@@ -92,6 +96,24 @@ def bot_conn(test_db):
     """A connection that runs as a bot_role member; every change is rolled back after the test"""
     conn = admin_connect(test_db, autocommit=False)
     conn.execute(f"EXECUTE AS USER = '{TEST_BOT_USER}';")
+    yield conn
+    conn.rollback()
+    conn.execute("REVERT;")
+    conn.close()
+
+@pytest.fixture
+def admin_conn(test_db):
+    """A connection as the Windows admin, for reading the database's own permission records"""
+    conn = admin_connect(test_db, autocommit=False)
+    yield conn
+    conn.rollback()
+    conn.close()
+
+@pytest.fixture
+def reader_conn(test_db):
+    """A connection that runs as a claude_reader_role member; every change is rolled back after the test"""
+    conn = admin_connect(test_db, autocommit=False)
+    conn.execute(f"EXECUTE AS USER = '{TEST_READER_USER}';")
     yield conn
     conn.rollback()
     conn.execute("REVERT;")

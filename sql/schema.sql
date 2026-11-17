@@ -380,12 +380,12 @@ GO
 CREATE TABLE subscriptions
 (
     subscription_id   INT IDENTITY(1,1) NOT NULL,
-    service_name      NVARCHAR(50)  NOT NULL,
+    [service_name]      NVARCHAR(50)  NOT NULL,
     [provider]        NVARCHAR(50)  NOT NULL,
     purpose           NVARCHAR(250) NULL,
     cost              DECIMAL(19,4) NOT NULL,
     billing_cycle     NVARCHAR(25)  NOT NULL,
-    start_date        DATE          NOT NULL,
+    [start_date]        DATE          NOT NULL,
     end_date          DATE          NULL,
     is_active         BIT           NOT NULL CONSTRAINT df_subscriptions_is_active DEFAULT 1,
     payment_method_id INT           NOT NULL,
