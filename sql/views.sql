@@ -168,3 +168,10 @@ LEFT JOIN
     GROUP BY ticker_id
 ) p ON p.ticker_id = tk.ticker_id;
 GO
+
+-- A view grant skips the column checks on the tables beneath it, so views that show profit are never granted.
+GRANT SELECT ON dbo.v_trades_current TO claude_reader_role;
+GRANT SELECT ON dbo.v_open_positions TO claude_reader_role;
+GRANT SELECT ON dbo.v_order_fill_mismatches TO claude_reader_role;
+GRANT SELECT ON dbo.v_open_audit_failures TO claude_reader_role;
+GO
