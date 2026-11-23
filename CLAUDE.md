@@ -38,6 +38,7 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 
 ## Commands
 
+- Secret scan on every commit: `pre-commit` runs gitleaks (`.pre-commit-config.yaml`). Once per clone: install gitleaks (`winget install Gitleaks.Gitleaks`), then `.\venv\Scripts\pre-commit.exe install`. A finding blocks the commit; remove the secret, never skip the hook.
 - Unit tests: `pytest tests/unit`
 - Integration tests: `pytest tests/integration`. They need SQL Server Express at `localhost\SQLEXPRESS` (override with `TEST_DB_SERVER`). They rebuild a throwaway `noctis_test` database and never read `.env`.
 
