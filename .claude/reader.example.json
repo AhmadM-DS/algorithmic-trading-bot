@@ -1,0 +1,9 @@
+{
+  "dev": {
+    "server": "localhost\\SQLEXPRESS",
+    "database": "noctis_dev",
+    "user": "claude_reader",
+    "password": "<your_password>",
+    "trust_server_cert": "yes"
+  }
+}
