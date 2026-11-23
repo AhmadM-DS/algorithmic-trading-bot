@@ -213,3 +213,6 @@ docs/
 
 #Personal scripts
 scripts/
+
+# Claude Code local files (reader login password, personal settings)
+.claude/*.local.json
