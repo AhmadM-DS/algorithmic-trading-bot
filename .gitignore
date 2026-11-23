@@ -216,3 +216,6 @@ scripts/
 
 # Claude Code local files (reader login password, personal settings)
 .claude/*.local.json
+
+# claude-security plugin scan reports
+CLAUDE-SECURITY-*/
