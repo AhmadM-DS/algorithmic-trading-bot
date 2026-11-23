@@ -12,6 +12,7 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 
 ## Workflow
 
+- **Status:** `docs/redesign_plan.md`, section "Where we left off" (its `*Updated <date>.*` summary). `/wrap-up` keeps it current.
 - Branch off `redesign` (`feat/`, `chore/`, `hook/`). PRs target `redesign`, not `main`, until the redesign ends.
 
 ## Database
