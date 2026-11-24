@@ -20,6 +20,7 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 - **Real data only through the reader helper:** `.\venv\Scripts\python.exe .claude/tools/read_db.py "SELECT ..." [--db dev]`. One SELECT per call, 200-row cap, runs as `claude_reader`. Name the columns: `SELECT *` and `COUNT(*)` are refused on tables with hidden columns.
 
 - New migration: `sql/migrations/NNN_name.sql`, then add it to `BUILD_FILES` in `tests/integration/conftest.py`. `views.sql` runs after every migration.
+- **Grants:** a new table gets its `bot_role` grants (INSERT / UPDATE / DELETE as needed) in the same migration that creates it; SELECT comes from the schema-wide grant. Append-only tables get `DENY UPDATE, DELETE`. Dev hides a missing grant (you're the owner there); prod fails with "permission denied".
 - **Reader role.** Granting a view grants every column it shows, so never grant `claude_reader_role` a view that reads a hidden column. Every new table or column goes into one of the lists in `tests/integration/test_claude_reader_permissions.py`. The guard tests fail until it does.
 
 ## Design rules
@@ -28,6 +29,28 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 - **Front doors:** each package exposes a narrow entry point in its `__init__.py`. The rest of the bot never reaches inside. Seams the plan names (swappable sizer, parameter providers, settings switches) are intentional even with one implementation.
 - **ML-ready:** save the inputs known at decision time, make the outcome joinable to them, and record who or what decided (provider, version).
 - **Day trading first:** anything that differs between day and swing trading is chosen by holding type or a named setting, never hard-coded as "day".
+- **Alpaca clients:** build every client through `alpaca_client.py`, so the rate limiter is attached. A client built directly skips the limiter and `api.log`.
+- **Secrets:** a new secret in `.env` goes into `MASK_ENV_VARS` in `settings.py`, or it isn't masked. Text sent anywhere other than logging or `notifications` passes through `logger.redact()` first.
+- **No surprises on import:** importing a file never connects to anything. Clients are built in `main.py` and passed in.
+- **Strategies only decide:** data in, signal out. No database, no API calls, and they never read the clock (the engine stamps the time).
+- **Same code everywhere:** live trading, backtests and ML training use the same strategies, features, sizing and risk rules.
+- **Storage functions take `conn` and never commit.** The caller owns the transaction.
+
+## Trading safety
+
+- **Alpaca is the source of truth:** every fill at Alpaca exists in the database exactly once, with its strategy and position.
+- **Nothing important lives only in memory:** a restart rebuilds state from the database and Alpaca. One bad ticker never stops the cycle.
+- **Sells are never blocked:** the kill switch, halts, audit blocks and guardrails stop buys only. Exits always run.
+- **Hard limits are human-set:** a model may take over a tunable value within its bounds, never a hard limit. Admin-only columns (`budget`, `mode`, `fill_override`) are never changed by the bot.
+- **Alert on change, not every cycle:** one alert when something breaks and one when it recovers.
+
+## Data
+
+- **Save raw first, then handle:** outside events (stream messages, account activities) are saved untouched before any processing.
+- **Append-only records:** `trades`, `broker_events` and `account_activities` are never updated; a correction is a new row.
+- **Derived values live in views, never stored:** counts and P/L are calculated, so they can't drift. Power BI reads only views.
+- **UTC everywhere:** store UTC; convert to Eastern only for the schedule and for display.
+- **Market data:** SIP volume only, closed candles only; IEX only as "where is the price now".
 
 ## Style
 
