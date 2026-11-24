@@ -38,6 +38,8 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 
 ## Trading safety
 
+- **Protection map:** `docs/protections.md` lists every choke point (orders, cancels, fills, clients) and its only callers. A branch that adds a protection or a new path to Alpaca or the trade tables updates it. The `trading-safety-reviewer` agent checks branches against it.
+
 - **Alpaca is the source of truth:** every fill at Alpaca exists in the database exactly once, with its strategy and position.
 - **Nothing important lives only in memory:** a restart rebuilds state from the database and Alpaca. One bad ticker never stops the cycle.
 - **Sells are never blocked:** the kill switch, halts, audit blocks and guardrails stop buys only. Exits always run.
