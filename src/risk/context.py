@@ -130,6 +130,7 @@ class RiskContext:
     used before today for each (strategy_id, name). events are the states that started this cycle. pending_buys
     are buy orders not filled yet; exposure and position counts include them. share_mismatches holds every ticker
     whose shares at Alpaca and in the database differ this cycle ({ticker: ShareCounts}); their buys are blocked.
+    audit_failure_tickers holds every ticker with an open end-of-day audit failure; their buys are blocked too.
     """
     as_of: datetime
     equity: float
@@ -146,6 +147,7 @@ class RiskContext:
     events: tuple[RiskEvent, ...] = ()
     pending_buys: tuple[PendingBuy, ...] = ()
     share_mismatches: dict = field(default_factory=dict)
+    audit_failure_tickers: frozenset = frozenset()
 
     def __post_init__(self):
         """Reject a naive as_of time"""

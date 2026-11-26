@@ -10,7 +10,9 @@ from decimal import Decimal
 #Local Imports
 from logger import db_log
 
-FILL_EVENT_TYPES = ("fill", "partial_fill", "catch_up_fill")
+ACTIVITY_FILL_TYPES = ("catch_up_fill", "audit_fill")
+FILL_EVENT_TYPES = ("fill", "partial_fill", *ACTIVITY_FILL_TYPES)
+FILL_PLACEHOLDERS = ", ".join("?" * len(FILL_EVENT_TYPES))
 FINAL_STATUSES = ("filled", "canceled", "expired", "rejected", "replaced")
 BOT_STATUSES = ("submitting", "unknown", "not_sent")
 
@@ -23,7 +25,8 @@ def save_broker_event(conn, *, event_type: str, alpaca_order_id: str | None, cli
 
     Parameters:
         conn (Connection): An open database connection
-        event_type (str): Alpaca's event ("fill", "canceled", ...) or "catch_up_fill" / "catch_up_status"
+        event_type (str): Alpaca's event ("fill", "canceled", ...), "catch_up_fill" / "catch_up_status" (the
+            fill stream's catch-up) or "audit_fill" (the end-of-day audit)
         alpaca_order_id (str | None): Alpaca's ID for the order
         client_order_id (str | None): The order's client_order_id, if the event has one
         execution_id (str | None): Alpaca's execution ID; on a fill, the fill's unique ID
@@ -48,6 +51,9 @@ def save_broker_event(conn, *, event_type: str, alpaca_order_id: str | None, cli
 def fill_seen(conn, fill_id: str) -> bool:
     """Check whether a fill was already saved to broker_events, handled or not
 
+    A message saved unreadable (no Alpaca order ID) doesn't count, so the catch-up records that fill from Alpaca's
+    activity.
+
     Parameters:
         conn (Connection): An open database connection
         fill_id (str): Alpaca's execution ID for the fill
@@ -56,7 +62,8 @@ def fill_seen(conn, fill_id: str) -> bool:
         True if a fill event with that ID is saved
     """
     row = conn.cursor().execute(
-        "SELECT TOP 1 1 FROM broker_events WHERE execution_id = ? AND event_type IN (?, ?, ?)",
+        f"SELECT TOP 1 1 FROM broker_events WHERE execution_id = ? AND event_type IN ({FILL_PLACEHOLDERS}) "
+        "AND alpaca_order_id IS NOT NULL",
         (fill_id, *FILL_EVENT_TYPES),
     ).fetchone()
     return row is not None
@@ -392,7 +399,8 @@ def get_open_positions_for_ticker(conn, ticker_id: int) -> list:
 def get_unhandled_fills(conn) -> list:
     """Return fill events in broker_events that have no trades row yet, oldest first
 
-    These are fills whose handling failed or is still waiting (e.g. for E1 to save the order row).
+    These are fills whose handling failed or is still waiting (e.g. for E1 to save the order row). Messages saved
+    unreadable (no Alpaca order ID) are left out: the catch-up records their fills from Alpaca's activities.
 
     Parameters:
         conn (Connection): An open database connection
@@ -404,7 +412,7 @@ def get_unhandled_fills(conn) -> list:
         "SELECT e.broker_event_id, e.event_type, e.raw_json "
         "FROM broker_events e "
         "LEFT JOIN trades t ON t.alpaca_fill_id = e.execution_id "
-        "WHERE e.event_type IN (?, ?, ?) AND t.trade_id IS NULL "
+        f"WHERE e.event_type IN ({FILL_PLACEHOLDERS}) AND e.alpaca_order_id IS NOT NULL AND t.trade_id IS NULL "
         "ORDER BY e.broker_event_id",
         FILL_EVENT_TYPES,
     ).fetchall()

@@ -365,3 +365,32 @@ def test_mismatched_ticker_buy_is_skipped_through_the_front_door(conn):
     decision = decide(buy(strategy_id), context)
 
     assert decision.skip_reason == "audit_mismatch"
+
+def open_audit_failure(conn, kind, ticker):
+    """Save a failed, unresolved end-of-day audit run with one failure"""
+    audit_id = conn.execute(
+        "INSERT INTO audit_log (audit_date, audit_type, fills_at_alpaca, fills_in_db, missing_in_db, "
+        "missing_at_alpaca, [status], catch_up_fills, audit_fills, price_mismatches, quantity_mismatches) "
+        "OUTPUT INSERTED.audit_id "
+        "VALUES ('2026-11-05', 'end_of_day', 1, 1, 0, 0, 'fail', 0, 0, 1, 0)").fetchone()[0]
+    conn.execute("INSERT INTO audit_failures (audit_id, kind, ticker) VALUES (?, ?, ?)", (audit_id, kind, ticker))
+
+def test_snapshot_holds_tickers_with_an_open_audit_failure(conn):
+    """Put a ticker with an open fill failure in audit_failure_tickers; leave out cash and share failures"""
+    open_audit_failure(conn, "price_mismatch", "AAPL")
+    open_audit_failure(conn, "share_mismatch", "XYZ")
+    open_audit_failure(conn, "cash", None)
+
+    context = build(conn, FakeBroker())
+
+    assert context.audit_failure_tickers == frozenset({"AAPL"})
+
+def test_audit_failure_ticker_buy_is_skipped_through_the_front_door(conn):
+    """Skip a buy of a ticker with an open audit failure with "audit_failure" """
+    strategy_id = add_strategy(conn)
+    open_audit_failure(conn, "missing_at_alpaca", "AAPL")
+    context = build(conn, FakeBroker())
+
+    decision = decide(buy(strategy_id), context)
+
+    assert decision.skip_reason == "audit_failure"

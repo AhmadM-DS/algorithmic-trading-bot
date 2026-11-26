@@ -86,10 +86,18 @@ def test_short_sale_activity_is_read_as_a_sell():
 
     assert update.side == "sell"
 
-@pytest.mark.parametrize("event_type, raw", [("fill", BUY_FILL), ("catch_up_fill", BUY_ACTIVITY)])
+def test_activity_found_by_the_audit_is_read_as_an_audit_fill():
+    """Name a fill the end-of-day audit found "audit_fill", so its origin shows in broker_events"""
+
+    update = from_activity(BUY_ACTIVITY, event_type="audit_fill")
+
+    assert (update.event_type, update.is_fill) == ("audit_fill", True)
+
+@pytest.mark.parametrize("event_type, raw", [("fill", BUY_FILL), ("catch_up_fill", BUY_ACTIVITY),
+                                             ("audit_fill", BUY_ACTIVITY)])
 def test_saved_fill_is_rebuilt_unchanged(event_type, raw):
     """Rebuild a fill from its broker_events row exactly as it first arrived"""
-    first = from_stream(raw) if event_type == "fill" else from_activity(raw)
+    first = from_stream(raw) if event_type == "fill" else from_activity(raw, event_type=event_type)
 
     rebuilt = from_saved(event_type, first.raw_json)
 

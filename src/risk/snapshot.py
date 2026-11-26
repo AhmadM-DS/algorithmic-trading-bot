@@ -12,12 +12,13 @@ from zoneinfo import ZoneInfo
 import pyodbc
 
 #Local Imports
-from audit.shares import compare_shares, database_shares
+from audit import NOT_BLOCKING_KINDS, compare_shares, database_shares
 from config.constants import DAILY_HALT_LIMITS, KILL_SWITCH_FRACTION, MAX_LEVERAGE, RISK_EQUITY_CAP
 from data.market_calendar import NEW_YORK
 from execution.broker import BrokerError
 from risk.context import BrokerPosition, OpenPosition, PendingBuy, RecentExit, RiskContext, RiskEvent, StrategyState
 from risk.parameters import get_parameter
+from storage.audit import get_open_failure_tickers
 from storage.orders import get_pending_buys
 from storage.risk import (get_daily_pnl, get_events_since, get_events_since_budget_set, get_exits_since,
                           get_latest_events, get_open_positions, get_pnl_since_budget, get_previous_parameters,
@@ -121,7 +122,8 @@ def _base_context(conn, broker, now: datetime, trading_mode: str) -> RiskContext
                        account_daily_change=float(account.equity - account.last_equity),
                        start_equity=_capped(float(account.last_equity), cap), scale_down=scale,
                        previous_parameters=get_previous_parameters(conn, day_start), pending_buys=pending,
-                       share_mismatches=compare_shares(held, database_shares(positions)))
+                       share_mismatches=compare_shares(held, database_shares(positions)),
+                       audit_failure_tickers=get_open_failure_tickers(conn, exclude_kinds=NOT_BLOCKING_KINDS))
 
 def _kill_switch(context: RiskContext, locked: bool, events: list) -> bool:
     """Return whether the kill switch is on; add an event the first time it trips today"""

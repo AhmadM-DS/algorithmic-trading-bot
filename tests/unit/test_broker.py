@@ -278,6 +278,33 @@ def test_fill_activities_raise_when_alpaca_cant_be_asked():
     with pytest.raises(BrokerUnavailable, match="500"):
         AlpacaBroker(client).get_fill_activities(datetime(2026, 10, 30))
 
+def test_activities_ask_for_every_type_between_two_times_oldest_first():
+    """Ask the all-types endpoint for activities after one time and until another, oldest first"""
+    client = FakeTradingClient(pages=[[activity(1)]])
+
+    found = AlpacaBroker(client).get_activities(datetime(2026, 11, 24, 5), datetime(2026, 11, 25, 5))
+
+    assert client.calls == [("get", "/account/activities",
+                             {"after": "2026-11-24T05:00:00Z", "until": "2026-11-25T05:00:00Z", "direction": "asc",
+                              "page_size": 100})]
+    assert found == [activity(1)]
+
+def test_activities_read_every_page():
+    """Ask for the next page from the last ID while a page comes back full"""
+    client = FakeTradingClient(pages=[[activity(n) for n in range(100)], []])
+
+    found = AlpacaBroker(client).get_activities(datetime(2026, 11, 24), datetime(2026, 11, 25))
+
+    assert len(found) == 100
+    assert client.calls[1][2]["page_token"] == "20261030134220960::fill-99"
+
+def test_activities_raise_when_alpaca_cant_be_asked():
+    """Raise BrokerUnavailable on a server error"""
+    client = FakeTradingClient(error=api_error(503, "unavailable"))
+
+    with pytest.raises(BrokerUnavailable, match="503"):
+        AlpacaBroker(client).get_activities(datetime(2026, 11, 24), datetime(2026, 11, 25))
+
 def test_cancel_order_sends_alpacas_id():
     """Cancel by Alpaca's order ID"""
     client = FakeTradingClient()
@@ -329,11 +356,11 @@ def test_session_keeps_callers_own_timeout(sent_kwargs):
 
     assert sent_kwargs["timeout"] == 3
 
-def account_json(equity="18345.99", last_equity="18400.00", buying_power="73383.96"):
+def account_json(equity="18345.99", last_equity="18400.00", buying_power="73383.96", cash=None):
     """Return an account as Alpaca's API sends it (numbers are strings)"""
     return {"id": "8f3c0f8e-0000-4000-8000-000000000001", "account_number": "PA1234", "status": "ACTIVE",
             "crypto_status": "ACTIVE", "currency": "USD", "buying_power": buying_power, "regt_buying_power": buying_power,
-            "daytrading_buying_power": "0", "non_marginable_buying_power": equity, "cash": equity,
+            "daytrading_buying_power": "0", "non_marginable_buying_power": equity, "cash": cash or equity,
             "accrued_fees": "0", "portfolio_value": equity, "pattern_day_trader": False, "trading_blocked": False,
             "transfers_blocked": False, "account_blocked": False, "created_at": "2026-01-02T15:00:00Z",
             "trade_suspended_by_user": False, "multiplier": "4", "shorting_enabled": True, "equity": equity,
@@ -355,6 +382,14 @@ def test_get_account_returns_equity_last_equity_and_buying_power():
     account = AlpacaBroker(client).get_account()
 
     assert (account.equity, account.last_equity, account.buying_power) ==            (Decimal("18345.99"), Decimal("18400.00"), Decimal("73383.96"))
+
+def test_get_account_returns_cash_exactly():
+    """Keep Alpaca's cash as an exact Decimal for the audit's cash check"""
+    client = FakeTradingClient(answer=TradeAccount(**account_json(cash="9876.5432")))
+
+    account = AlpacaBroker(client).get_account()
+
+    assert account.cash == Decimal("9876.5432")
 
 def test_get_account_raises_when_alpaca_cant_be_asked():
     """Raise BrokerUnavailable on a timeout so risk skips buys this cycle"""

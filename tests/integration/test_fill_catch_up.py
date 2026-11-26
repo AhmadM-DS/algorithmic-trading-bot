@@ -4,6 +4,7 @@ Integration tests for fills.catch_up: missed fills, missed status changes and th
 """
 
 #Standard Library
+import json
 from datetime import datetime
 from decimal import Decimal
 
@@ -13,8 +14,9 @@ import pytest
 #Local Imports
 from execution.broker import BrokerOrder
 from fill_samples import (NOW, CommitCounter, add_bracket, add_strategy, fill, order, positions, trades)
-from fills.catch_up import catch_up, catch_up_start
+from fills.catch_up import catch_up, catch_up_start, retry_unhandled
 from fills.handler import process_update
+from storage.fills import save_broker_event
 
 class FakeBroker:
     """Stands in for AlpacaBroker: returns the given activities and orders, and records what was asked"""
@@ -159,3 +161,67 @@ def test_still_waiting_fill_is_not_counted_as_retried(conn):
     result = catch_up(conn, FakeBroker(), early)
 
     assert (result.retried, trades(conn)) == (0, [])
+
+def test_unreadable_saved_fill_is_skipped_by_the_retry_pass(conn, strategy_id):
+    """Skip a saved fill message that can't be read and still retry the readable ones"""
+    add_bracket(conn, strategy_id)
+    save_broker_event(conn, event_type="fill", alpaca_order_id=None, client_order_id=None, execution_id=None,
+                      ticker=None, event_at=None, raw_json='{"event": "fill"}')
+    process_update(conn, fill("alpaca-buy-1", 10, Decimal("5.01"), "exec-1"), datetime(2026, 11, 2, 14, 31, 5),
+                   wait_seconds=10 ** 6)
+
+    results = retry_unhandled(conn, NOW)
+
+    assert [r.outcome for r in results] == []
+    assert len(trades(conn)) == 1
+
+def test_fill_whose_stream_message_was_unreadable_is_recorded_from_the_activity(conn, strategy_id):
+    """Record a fill whose stream message was saved unreadable: the catch-up doesn't count it as already seen"""
+    add_bracket(conn, strategy_id)
+    save_broker_event(conn, event_type="fill", alpaca_order_id=None, client_order_id=None, execution_id="exec-buy-1",
+                      ticker=None, event_at=None, raw_json='{"event": "fill"}')
+
+    catch_up(conn, FakeBroker(activities=[activity("alpaca-buy-1", "exec-buy-1")]), NOW)
+
+    assert len(trades(conn)) == 1
+
+def test_retry_pass_goes_on_past_a_saved_fill_it_cant_read(conn, strategy_id):
+    """Skip a saved fill whose message can't be read and still handle the next one"""
+    add_bracket(conn, strategy_id)
+    save_broker_event(conn, event_type="catch_up_fill", alpaca_order_id="alpaca-buy-1", client_order_id=None,
+                      execution_id="garbled", ticker="AAPL", event_at=None, raw_json='{"garbled": true}')
+    unhandled = fill("alpaca-buy-1", 10, Decimal("5.01"), "exec-1")
+    save_broker_event(conn, event_type=unhandled.event_type, alpaca_order_id=unhandled.alpaca_order_id,
+                      client_order_id=unhandled.client_order_id, execution_id=unhandled.execution_id,
+                      ticker=unhandled.ticker, event_at=unhandled.event_at, raw_json=unhandled.raw_json)
+
+    results = retry_unhandled(conn, NOW)
+
+    assert [r.outcome for r in results] == ["handled"]
+    assert len(trades(conn)) == 1
+
+@pytest.mark.parametrize("raw_json", ['{"garbled": true}', '"not a record"', None])
+def test_retry_pass_goes_on_past_any_unreadable_saved_fill(conn, strategy_id, raw_json):
+    """Skip a saved fill whose message is missing fields, isn't a record or has a garbled number, and handle the
+    next one"""
+    add_bracket(conn, strategy_id)
+    garbled_number = json.dumps(activity("alpaca-buy-1", "garbled", price="abc"))
+    save_broker_event(conn, event_type="catch_up_fill", alpaca_order_id="alpaca-buy-1", client_order_id=None,
+                      execution_id="garbled", ticker="AAPL", event_at=None, raw_json=raw_json or garbled_number)
+    unhandled = fill("alpaca-buy-1", 10, Decimal("5.01"), "exec-1")
+    save_broker_event(conn, event_type=unhandled.event_type, alpaca_order_id=unhandled.alpaca_order_id,
+                      client_order_id=unhandled.client_order_id, execution_id=unhandled.execution_id,
+                      ticker=unhandled.ticker, event_at=unhandled.event_at, raw_json=unhandled.raw_json)
+
+    results = retry_unhandled(conn, NOW)
+
+    assert [r.outcome for r in results] == ["handled"]
+
+def test_catch_up_goes_on_past_an_unreadable_activity(conn, strategy_id):
+    """Skip an activity the catch-up can't read (the end-of-day audit records it) and still record the next fill"""
+    add_bracket(conn, strategy_id)
+    broken = {"id": "20261102093000000::broken", "activity_type": "FILL"}
+
+    result = catch_up(conn, FakeBroker(activities=[broken, activity("alpaca-buy-1", "exec-buy-1")]), NOW)
+
+    assert (result.fills, len(trades(conn))) == (1, 1)

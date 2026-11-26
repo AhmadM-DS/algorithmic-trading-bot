@@ -1,6 +1,7 @@
 import pyodbc
+import pytest
 
-from storage.connections import is_duplicate_error
+from storage.connections import is_connection_error, is_duplicate_error
 
 def make_error(message):
     return pyodbc.IntegrityError("23000", f"[23000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]{message}")
@@ -34,3 +35,13 @@ def test_to_db_time_rejects_naive():
     from storage.connections import to_db_time
     with pytest.raises(TypeError):
         to_db_time(pd.Timestamp("2026-11-24 10:00"))
+
+@pytest.mark.parametrize("error, lost", [(pyodbc.OperationalError("08S01", "link failure"), True),
+                                         (pyodbc.InterfaceError("IM002", "driver"), True),
+                                         (pyodbc.ProgrammingError("42000", "truncated"), False),
+                                         (pyodbc.DataError("22001", "too long"), False),
+                                         (pyodbc.IntegrityError("23000", "duplicate"), False),
+                                         (pyodbc.Error("HY000", "general"), False)])
+def test_connection_errors_are_told_apart_from_data_errors(error, lost):
+    """Call only a lost or unusable connection a connection error; errors about the data are not"""
+    assert is_connection_error(error) is lost

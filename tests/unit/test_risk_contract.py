@@ -218,6 +218,30 @@ def test_share_mismatch_skips_buys_of_that_ticker():
 
     assert decision.failed_checks[:2] == ("kill_switch", "audit_mismatch")
 
+def test_open_audit_failure_skips_buys_of_that_ticker_after_a_share_mismatch():
+    """Skip a buy with "audit_failure" while an audit failure on its ticker is open, ranked right after
+    "audit_mismatch" """
+    context = _context()
+    blocked = RiskContext(as_of=context.as_of, equity=context.equity, buying_power=context.buying_power,
+                          strategies=context.strategies, open_positions=(), recent_exits=(), broker_positions=(),
+                          share_mismatches={"AAPL": ShareCounts(alpaca=5, database=0)},
+                          audit_failure_tickers=frozenset({"AAPL"}))
+
+    decision = decide(_request(), blocked)
+
+    assert decision.failed_checks[:2] == ("audit_mismatch", "audit_failure")
+
+def test_open_audit_failure_never_blocks_a_sell():
+    """Sell a ticker with an open audit failure: audit blocks stop buys only"""
+    context = RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=1000.0, strategies=_context().strategies,
+                          open_positions=(_held(LIVE, "AAPL", 5, 10.0),), recent_exits=(),
+                          broker_positions=(BrokerPosition(ticker="AAPL", shares=5),),
+                          audit_failure_tickers=frozenset({"AAPL"}))
+
+    decision = decide(_request(side="sell"), context)
+
+    assert (decision.approved_quantity, decision.skip_reason) == (5, None)
+
 def test_share_mismatch_never_blocks_a_sell():
     """Sell a mismatched ticker, capped by both counts, so a mismatch can never trap a position"""
     context = RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=1000.0, strategies=_context().strategies,

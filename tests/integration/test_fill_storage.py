@@ -12,7 +12,7 @@ import pytest
 
 #Local Imports
 from fill_samples import FILLED_AT, add_bracket, add_strategy, order, ticker_id
-from storage.fills import (add_to_position, close_position, get_entry_defaults, get_open_orders,
+from storage.fills import (add_to_position, close_position, fill_seen, get_entry_defaults, get_open_orders,
                            get_open_positions_for_ticker, get_position_totals, get_strategy_id, get_unhandled_fills,
                            insert_position, insert_trade, save_broker_event, update_order_from_broker)
 
@@ -125,12 +125,13 @@ def test_unhandled_fills_are_fill_events_with_no_trade(bot_conn, strategy_id):
     raw_fill(bot_conn, "fill", "handled")
     raw_fill(bot_conn, "partial_fill", "missing-1")
     raw_fill(bot_conn, "catch_up_fill", "missing-2")
+    raw_fill(bot_conn, "audit_fill", "missing-3")
     raw_fill(bot_conn, "new", "not-a-fill")
     new_trade(bot_conn, position_id, buy, "handled", "buy", 10, "5.00")
 
     found = get_unhandled_fills(bot_conn)
 
-    assert [row["event_type"] for row in found] == ["partial_fill", "catch_up_fill"]
+    assert [row["event_type"] for row in found] == ["partial_fill", "catch_up_fill", "audit_fill"]
 
 def test_open_orders_skip_final_and_bot_only_statuses(bot_conn, strategy_id):
     """Look up only orders Alpaca knows that can still change"""
@@ -162,3 +163,21 @@ def test_unknown_strategy_name_raises(bot_conn):
 
     with pytest.raises(LookupError, match="'nope'"):
         get_strategy_id(bot_conn, "nope")
+
+def unreadable_fill(conn, execution_id):
+    """Save a fill message the stream couldn't read: no Alpaca order id, as FillStream._save_unreadable saves it"""
+    save_broker_event(conn, event_type="fill", alpaca_order_id=None, client_order_id=None, execution_id=execution_id,
+                      ticker=None, event_at=None, raw_json='{"event": "fill"}')
+
+def test_fill_saved_unreadable_is_not_seen(bot_conn):
+    """Treat a fill whose message couldn't be read as not seen, so the catch-up records it from Alpaca's activity"""
+    unreadable_fill(bot_conn, "exec-1")
+
+    assert fill_seen(bot_conn, "exec-1") is False
+
+def test_unhandled_fills_leave_out_messages_saved_unreadable(bot_conn):
+    """Leave out unreadable fill messages, so the retry pass never meets one"""
+    unreadable_fill(bot_conn, "garbled")
+    raw_fill(bot_conn, "fill", "readable")
+
+    assert [row["event_type"] for row in get_unhandled_fills(bot_conn)] == ["fill"]
