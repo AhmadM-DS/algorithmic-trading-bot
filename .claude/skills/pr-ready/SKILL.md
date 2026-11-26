@@ -24,6 +24,7 @@ Run these first; they're cheap and a failure here is a blocker.
 - **Secrets in the branch's commits:** `gitleaks git --redact --log-opts="<base>..HEAD"`. Uncommitted changes are scanned by the commit hook when the owner commits.
 - **Claude tooling:** if anything under `.claude/` changed, validate it with `claude plugin validate .claude`. In the VS Code extension, `claude` isn't on PATH; use the binary bundled in the extension (`resources/native-binary/claude.exe`). A failed validation means a skill or agent silently doesn't load.
 - **Database:** for a new migration, check it's in the integration build list and that the reader-permission guard tests ran and passed.
+- **Failure checklist:** check every new or changed function in `src/` against the "Failure checklist" in `docs/code_style.md` yourself (no agent); each miss is a finding. In step 3, tell each reviewer to check against it too.
 
 If CI already runs one of these checks for the branch, skip it and say so.
 

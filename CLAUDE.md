@@ -13,6 +13,7 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 ## Workflow
 
 - **Status:** `docs/redesign_plan.md`, section "Where we left off" (its `*Updated <date>.*` summary). `/wrap-up` keeps it current.
+- **Never read `docs/redesign_plan.md` whole** (about 90k tokens): Grep it, or read only the lines you need.
 - Branch off `redesign` (`feat/`, `chore/`, `hook/`). PRs target `redesign`, not `main`, until the redesign ends.
 
 ## Database
@@ -29,6 +30,7 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 - **Front doors:** each package exposes a narrow entry point in its `__init__.py`. The rest of the bot never reaches inside. Seams the plan names (swappable sizer, parameter providers, settings switches) are intentional even with one implementation.
 - **ML-ready:** save the inputs known at decision time, make the outcome joinable to them, and record who or what decided (provider, version).
 - **Day trading first:** anything that differs between day and swing trading is chosen by holding type or a named setting, never hard-coded as "day".
+- **Asset class:** the final bot trades stocks (day and swing) and options. Anything that differs between stocks and options (symbol format, quantity unit and multiplier, exits, risk, market data, expiry events) is chosen by asset class, never hard-coded as shares. Options come after the live data plan (OPT tickets in the plan).
 - **Alpaca clients:** build every client through `alpaca_client.py`, so the rate limiter is attached. A client built directly skips the limiter and `api.log`.
 - **Secrets:** a new secret in `.env` goes into `MASK_ENV_VARS` in `settings.py`, or it isn't masked. Text sent anywhere other than logging or `notifications` passes through `logger.redact()` first.
 - **No surprises on import:** importing a file never connects to anything. Clients are built in `main.py` and passed in.
@@ -57,6 +59,7 @@ Algorithmic day-trading bot (Python, Alpaca, Azure SQL). The owner reviews every
 ## Style
 
 - Follow `docs/code_style.md` for new or changed lines. Don't flag style in code the branch didn't touch.
+- Before calling code done, check each new or changed function against the "Failure checklist" in `docs/code_style.md`.
 - Comment only when the code can't be understood without it. Design reasons go in the docs.
 - Versions are always three parts: `"1.0.0"`.
 - Files written by scripts go in `scripts/reports/`. `logs/` holds only the app's `.log` files.
