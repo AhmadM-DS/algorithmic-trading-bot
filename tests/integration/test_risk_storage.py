@@ -45,7 +45,7 @@ def test_pnl_since_budget_ignores_positions_closed_before_the_budget_was_set(bot
 def test_budget_change_restarts_pnl_since_budget(bot_conn):
     """Count nothing once the admin changes the budget after the losses"""
     strategy_id = add_strategy(bot_conn)
-    closed_position(bot_conn, strategy_id, -20, db_now(bot_conn))
+    closed_position(bot_conn, strategy_id, -20, db_now(bot_conn) - timedelta(seconds=1))
 
     as_admin(bot_conn, "UPDATE strategies SET budget = 300 WHERE strategy_id = ?", strategy_id)
 

@@ -225,3 +225,18 @@ def test_catch_up_goes_on_past_an_unreadable_activity(conn, strategy_id):
     result = catch_up(conn, FakeBroker(activities=[broken, activity("alpaca-buy-1", "exec-buy-1")]), NOW)
 
     assert (result.fills, len(trades(conn))) == (1, 1)
+
+OPTION = "AAPL261120C00150000"
+
+def test_option_fill_is_kept_once_and_never_retried(conn):
+    """Keep an option fill the catch-up finds once: the next catch-up counts it as seen and the retry pass skips it,
+    so it never alerts or fails every minute"""
+    option = {**activity("alpaca-opt-1", "exec-opt", quantity=1, price="1.25"), "symbol": OPTION}
+    broker = FakeBroker(activities=[option])
+
+    first = catch_up(conn, broker, NOW)
+    second = catch_up(conn, broker, NOW)
+
+    assert (first.fills, first.untracked, len(first.alerts)) == (0, 1, 1)
+    assert (second.untracked, second.retried, second.alerts) == (0, 0, [])
+    assert len(raw_events(conn, "untracked_catch_up_fill")) == 1

@@ -287,3 +287,82 @@ def test_failed_handling_rolls_back_alerts_and_keeps_the_raw_event(bot_conn, str
     assert (result.outcome, conn.commits, conn.rollbacks) == ("failed", 1, 1)
     assert "database hiccup" in result.alerts[0][1]
     assert bot_conn.execute("SELECT COUNT(*) FROM broker_events WHERE execution_id = 'exec-buy-1'").fetchone()[0] == 1
+
+OPTION = "AAPL261120C00150000"
+
+def raw_events(conn):
+    """Return every broker_events row as (event_type, ticker, alpaca_order_id), oldest first"""
+    return [tuple(row) for row in conn.execute(
+        "SELECT event_type, ticker, alpaca_order_id FROM broker_events ORDER BY broker_event_id").fetchall()]
+
+def option_fill(execution_id="exec-opt", alpaca_order_id="alpaca-opt-1", **kwargs):
+    """Return a full fill of 1 contract of OPTION at 1.25"""
+    return fill(alpaca_order_id, 1, Decimal("1.25"), execution_id, quantity=1, ticker=OPTION, **kwargs)
+
+def test_option_fill_is_saved_raw_as_untracked_and_alerted_once(bot_conn):
+    """Keep a fill whose symbol doesn't fit the ticker column (an option) raw and committed as untracked_fill, with
+    no ticker, record nothing else, and alert once with the IDs needed to find it"""
+    conn = CommitCounter(bot_conn)
+
+    result = process_update(conn, option_fill(), NOW)
+
+    assert result.outcome == "untracked"
+    assert (raw_events(conn), conn.commits) == ([("untracked_fill", None, "alpaca-opt-1")], 1)
+    assert (trades(conn), positions(conn)) == ([], [])
+    (channel, message), = result.alerts
+    assert channel == "critical" and all(part in message for part in (OPTION, "alpaca-opt-1", "exec-opt"))
+
+def test_two_fills_of_the_same_option_alert_with_different_text(bot_conn):
+    """Give each option fill its own alert text, so the stream's once-per-text guard can't swallow a later fill"""
+    conn = CommitCounter(bot_conn)
+
+    first = process_update(conn, option_fill("exec-opt-1"), NOW)
+    second = process_update(conn, option_fill("exec-opt-2", "alpaca-opt-2"), NOW)
+
+    assert first.alerts[0][1] != second.alerts[0][1]
+
+def test_option_fill_seen_again_is_kept_raw_without_a_second_alert(bot_conn):
+    """Save a redelivered option fill raw again but don't alert it twice"""
+    conn = CommitCounter(bot_conn)
+    process_update(conn, option_fill(), NOW)
+
+    again = process_update(conn, option_fill(), NOW)
+
+    assert (again.outcome, again.alerts, len(raw_events(conn))) == ("untracked", [], 2)
+
+def test_partial_option_fill_keeps_its_source_in_the_type(bot_conn):
+    """Save a partial option fill as untracked_partial_fill, so the row says which message shape it holds"""
+    update = fill("alpaca-opt-1", 1, Decimal("1.25"), "exec-opt", quantity=2, filled=1, ticker=OPTION)
+
+    process_update(CommitCounter(bot_conn), update, NOW)
+
+    assert raw_events(bot_conn) == [("untracked_partial_fill", None, "alpaca-opt-1")]
+
+def test_option_fill_handled_again_writes_no_row(bot_conn):
+    """Write nothing when an option fill is handled again from its saved row (save_raw False)"""
+    result = process_update(CommitCounter(bot_conn), option_fill(), NOW, save_raw=False)
+
+    assert (result.outcome, raw_events(bot_conn)) == ("untracked", [])
+
+@pytest.mark.parametrize("ticker, untracked", [("ABCDEFGHIJ", False), ("ABCDEFGHIJK", True), ("", True)])
+def test_only_symbols_that_dont_fit_or_are_empty_are_untracked(bot_conn, ticker, untracked):
+    """Keep handling a symbol of exactly 10 characters; keep an 11-character or empty one raw only"""
+    update = fill("alpaca-x-1", 10, Decimal("5.00"), "exec-x", ticker=ticker)
+
+    result = process_update(CommitCounter(bot_conn), update, NOW, wait_seconds=10 ** 6)
+
+    assert (result.outcome == "untracked") is untracked
+
+def test_update_with_no_symbol_takes_the_normal_path(bot_conn):
+    """Handle an update whose symbol is missing (None) as before, saved raw under its own type"""
+    result = process_update(CommitCounter(bot_conn), fill("alpaca-x-1", 10, Decimal("5.00"), "exec-x", ticker=None),
+                            NOW, wait_seconds=10 ** 6)
+
+    assert result.outcome != "untracked" and raw_events(bot_conn)[0][0] == "fill"
+
+def test_option_order_event_is_saved_raw_without_an_alert(bot_conn):
+    """Keep a non-fill event of an option order (new, canceled) raw, with no ticker and no alert"""
+    result = process_update(CommitCounter(bot_conn), status_event("new", "alpaca-opt-1", ticker=OPTION), NOW)
+
+    assert (result.outcome, result.alerts) == ("untracked", [])
+    assert raw_events(bot_conn) == [("new", None, "alpaca-opt-1")]

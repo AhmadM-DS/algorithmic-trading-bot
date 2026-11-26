@@ -18,15 +18,17 @@ from storage.fills import fill_seen, get_last_event_time, get_open_orders, get_u
 
 @dataclass
 class CatchUpResult:
-    """What one catch-up found: new fills, order status changes, retried fills, and the alerts they raised"""
+    """What one catch-up found: new fills, order status changes, retried fills, fills kept raw only (options),
+    and the alerts they raised"""
     fills: int = 0
     status_changes: int = 0
     retried: int = 0
+    untracked: int = 0
     alerts: list = field(default_factory=list)
 
     @property
     def found_anything(self) -> bool:
-        return bool(self.fills or self.status_changes or self.retried)
+        return bool(self.fills or self.status_changes or self.retried or self.untracked)
 
 def catch_up_start(conn, now: datetime, margin_seconds: int = CATCH_UP_MARGIN_SECONDS) -> datetime:
     """Return the time the catch-up asks Alpaca for fills from
@@ -110,7 +112,10 @@ def catch_up(conn, broker, now: datetime, wait_seconds: int = UNKNOWN_ORDER_WAIT
         if fill_seen(conn, update.execution_id) or trade_exists(conn, update.execution_id):
             continue
         handled = process_update(conn, update, now, wait_seconds=wait_seconds)
-        result.fills += 1
+        if handled.outcome == "untracked":
+            result.untracked += 1
+        else:
+            result.fills += 1
         result.alerts += handled.alerts
 
     for row in get_open_orders(conn):
@@ -128,5 +133,5 @@ def catch_up(conn, broker, now: datetime, wait_seconds: int = UNKNOWN_ORDER_WAIT
 
     if result.found_anything:
         trades_log.info(f"Catch-up: {result.fills} missed fills, {result.status_changes} status changes, "
-                        f"{result.retried} fills retried")
+                        f"{result.retried} fills retried, {result.untracked} option fills kept raw only")
     return result

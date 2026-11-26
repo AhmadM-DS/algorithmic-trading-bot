@@ -71,3 +71,10 @@ def test_database_shares_sum_every_strategy_holding_a_ticker():
     totals = database_shares(positions)
 
     assert totals == {"ABC": 100, "XYZ": 5}
+
+def test_option_held_at_alpaca_is_not_a_share_mismatch():
+    """Leave a held option out of the share check: the database can't hold it (BUG-26), so it would mismatch every
+    cycle"""
+    mismatches = compare_shares({"AAPL": 10, "AAPL261120C00150000": 1}, {"AAPL": 10})
+
+    assert mismatches == {}

@@ -13,8 +13,17 @@ from logger import db_log
 ACTIVITY_FILL_TYPES = ("catch_up_fill", "audit_fill")
 FILL_EVENT_TYPES = ("fill", "partial_fill", *ACTIVITY_FILL_TYPES)
 FILL_PLACEHOLDERS = ", ".join("?" * len(FILL_EVENT_TYPES))
+UNTRACKED_PREFIX = "untracked_"
+UNTRACKED_FILL_TYPES = tuple(UNTRACKED_PREFIX + event_type for event_type in FILL_EVENT_TYPES)
+SEEN_FILL_TYPES = (*FILL_EVENT_TYPES, *UNTRACKED_FILL_TYPES)
+TICKER_LENGTH = 10
 FINAL_STATUSES = ("filled", "canceled", "expired", "rejected", "replaced")
 BOT_STATUSES = ("submitting", "unknown", "not_sent")
+
+def fits_ticker(symbol) -> bool:
+    """Return True if a symbol fits the ticker columns; an option's longer symbol (OCC format) or an empty one
+    doesn't"""
+    return bool(symbol) and len(symbol) <= TICKER_LENGTH
 
 def save_broker_event(conn, *, event_type: str, alpaca_order_id: str | None, client_order_id: str | None,
                       execution_id: str | None, ticker: str | None, event_at: datetime | None,
@@ -52,7 +61,7 @@ def fill_seen(conn, fill_id: str) -> bool:
     """Check whether a fill was already saved to broker_events, handled or not
 
     A message saved unreadable (no Alpaca order ID) doesn't count, so the catch-up records that fill from Alpaca's
-    activity.
+    activity. A fill kept raw only as "untracked_..." (an option) counts, so the catch-up doesn't keep finding it.
 
     Parameters:
         conn (Connection): An open database connection
@@ -62,9 +71,9 @@ def fill_seen(conn, fill_id: str) -> bool:
         True if a fill event with that ID is saved
     """
     row = conn.cursor().execute(
-        f"SELECT TOP 1 1 FROM broker_events WHERE execution_id = ? AND event_type IN ({FILL_PLACEHOLDERS}) "
-        "AND alpaca_order_id IS NOT NULL",
-        (fill_id, *FILL_EVENT_TYPES),
+        f"SELECT TOP 1 1 FROM broker_events WHERE execution_id = ? "
+        f"AND event_type IN ({', '.join('?' * len(SEEN_FILL_TYPES))}) AND alpaca_order_id IS NOT NULL",
+        (fill_id, *SEEN_FILL_TYPES),
     ).fetchone()
     return row is not None
 

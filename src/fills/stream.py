@@ -134,7 +134,8 @@ class FillStream:
             result = catch_up(conn, self.broker, _utc_now())
             if result.found_anything:
                 insert_bot_event(conn, "fill_catch_up", f"{result.fills} missed fills, {result.status_changes} "
-                                                        f"status changes, {result.retried} fills retried")
+                                                        f"status changes, {result.retried} fills retried, "
+                                                        f"{result.untracked} option fills kept raw only")
                 conn.commit()
             self.send_alerts(result.alerts)
         except BrokerUnavailable as error:

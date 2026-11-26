@@ -1140,3 +1140,14 @@ def test_re_audit_without_the_share_check_lifts_a_fixed_tickers_block(conn, stra
     assert [(row.ticker, json.loads(row.details)) for row in carried] == [
         ("AAPL", {"carried_from": first.audit_id}), ("MSFT", {"carried_from": first.audit_id})]
     assert "missing_in_db on AAPL fill exec-leg" in alerts.sent[-1] and "resolved" in alerts.sent[-1]
+
+def test_option_the_stream_kept_raw_is_one_untracked_failure_and_never_recorded(conn, alerts, notes):
+    """Audit a day whose option fill the stream already kept raw: one untracked_symbol failure, no audit_fill, no
+    second raw row"""
+    option = fill("alpaca-opt-1", 1, Decimal("1.25"), "exec-opt", quantity=1, ticker=OPTION, at=BUY_AT)
+    stream(conn, option)
+
+    audit(conn, FakeAuditBroker([fill_activity(option)]), alerts, notes, check_now=False)
+
+    assert [tuple(r) for r in failure_rows(conn)] == [("untracked_symbol", None, "exec-opt")]
+    assert [row.event_type for row in conn.execute("SELECT event_type FROM broker_events")] == ["untracked_fill"]
