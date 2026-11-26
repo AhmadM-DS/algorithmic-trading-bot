@@ -2,7 +2,7 @@
 name: silent-failure-hunter
 description: "Use this agent when reviewing a branch or PR before it is opened, to find silent failures, inadequate error handling and unjustified fallbacks. Not proactive: run it when asked or from /pr-ready."
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 color: yellow
 ---
 

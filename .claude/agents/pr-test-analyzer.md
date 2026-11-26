@@ -2,7 +2,7 @@
 name: pr-test-analyzer
 description: "Use this agent when reviewing a branch or PR before it is opened, to check test coverage quality and completeness. Not proactive: run it when asked or from /pr-ready."
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 color: cyan
 ---
 
