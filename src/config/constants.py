@@ -91,8 +91,13 @@ MAX_PRICE_MOVE_OF_STOP = 0.5
 RECONCILIATION_WAIT_SECONDS = 300
 RECONCILIATION_REPEAT_MINUTES = 60
 RECONCILIATION_FAILED_CHECKS = 3
-SKIP_PRIORITY = ("shadow", "strategy_off", "kill_switch", "audit_mismatch", "drawdown_limit", "daily_halt",
-                 "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",
+AUDIT_MINUTES_AFTER_CLOSE = 15
+AUDIT_CATCH_UP_MAX_DAYS = 30
+ACTIVITY_LOOKBACK_DAYS = 5
+AUDIT_REPEAT_MINUTES = 60
+CASH_TOLERANCE = 0.01
+SKIP_PRIORITY = ("shadow", "strategy_off", "kill_switch", "audit_mismatch", "audit_failure", "drawdown_limit",
+                 "daily_halt", "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",
                  "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "invalid_exit_prices",
                  "market_closed", "too_late_to_buy", "not_tradable", "open_order", "stale_price", "price_moved",
                  "nothing_to_sell")

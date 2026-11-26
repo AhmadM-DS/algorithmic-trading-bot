@@ -1,13 +1,14 @@
 """
 test_audit_watch.py
-Unit tests for ReconciliationWatch: mismatch clocks, alert repeats and failed checks
+Unit tests for ReconciliationWatch (mismatch clocks, alert repeats, failed checks) and AuditWatch (reminders,
+outages)
 """
 
 #Standard Library
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 #Local Imports
-from audit import ReconciliationWatch
+from audit import AuditWatch, ReconciliationWatch
 
 NOW = datetime(2026, 11, 11, 15, 0)
 """A fixed naive UTC time so no test depends on the clock"""
@@ -86,3 +87,45 @@ def test_check_ran_reports_a_recovery_only_after_an_alert():
     recovered = watch.check_ran()
 
     assert (quiet, recovered) == (False, True)
+
+AUDIT_OPEN = datetime(2026, 11, 3, 14, 31, tzinfo=timezone.utc)
+
+def test_first_reminder_is_due_at_once():
+    """Remind on the first check when nothing has gone out yet (also after a restart)"""
+
+    assert AuditWatch().reminder_due(AUDIT_OPEN, 60) is True
+
+def test_reminder_repeats_after_exactly_the_interval():
+    """Stay quiet within the interval and remind again once it has fully passed"""
+    watch = AuditWatch()
+    watch.reminded(AUDIT_OPEN)
+
+    due = [watch.reminder_due(AUDIT_OPEN + timedelta(minutes=minutes), 60) for minutes in (59, 60)]
+
+    assert due == [False, True]
+
+def test_reminder_is_due_on_a_new_new_york_day():
+    """Remind at the first check of a new New York day even if the interval hasn't passed"""
+    watch = AuditWatch()
+    watch.reminded(datetime(2026, 11, 3, 20, 59, tzinfo=timezone.utc))
+
+    assert watch.reminder_due(datetime(2026, 11, 4, 14, 30, tzinfo=timezone.utc), 1000) is True
+
+def test_outage_alerts_once_per_cause_and_recovery_clears_all():
+    """Alert the first outage of each cause, then say the audit runs again once, after any outage"""
+    watch = AuditWatch()
+
+    first = [watch.outage("alpaca"), watch.outage("alpaca"), watch.outage("database")]
+
+    assert first == [True, False, True]
+    assert (watch.recovered(), watch.recovered()) == (True, False)
+
+def test_recovery_of_some_causes_keeps_the_others():
+    """Clear only the causes that are over, so a day still failing keeps its outage (and its alert) open"""
+    watch = AuditWatch()
+    watch.outage("alpaca")
+    watch.outage("data")
+
+    recovered = watch.recovered(("alpaca", "database"))
+
+    assert (recovered, watch.outage("data"), watch.recovered(("alpaca",))) == (True, False, False)

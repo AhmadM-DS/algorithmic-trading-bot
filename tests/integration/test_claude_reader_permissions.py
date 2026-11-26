@@ -26,7 +26,11 @@ HIDDEN_COLUMNS = [("strategies", "budget"),
                   ("account_activities", "quantity"),
                   ("account_activities", "price"),
                   ("account_activities", "net_amount"),
-                  ("account_activities", "raw_json")]
+                  ("account_activities", "raw_json"),
+                  ("audit_log", "alpaca_cash"),
+                  ("audit_log", "expected_cash"),
+                  ("audit_failures", "details"),
+                  ("cash_adjustments", "amount")]
 
 ALLOWED_COLUMNS = [("strategies", "strategy_id, strategy, time_frame, default_holding_type, updated_at, mode, "
                                   "budget_set_at"),
@@ -62,7 +66,11 @@ ALLOWED_COLUMNS = [("strategies", "strategy_id, strategy, time_frame, default_ho
                    ("account_activities", "account_activity_id, alpaca_activity_id, alpaca_order_id, activity_type, "
                                           "activity_at, ticker, side, loaded_at"),
                    ("audit_log", "audit_id, audit_date, audit_type, run_at, fills_at_alpaca, fills_in_db, "
-                                 "missing_in_db, missing_at_alpaca, [status], notes, resolved_at"),
+                                 "missing_in_db, missing_at_alpaca, [status], notes, resolved_at, not_run_reason, "
+                                 "catch_up_fills, audit_fills, price_mismatches, quantity_mismatches, "
+                                 "share_mismatches"),
+                   ("audit_failures", "audit_failure_id, audit_id, kind, ticker, alpaca_fill_id"),
+                   ("cash_adjustments", "cash_adjustment_id, effective_date, reason, note, created_at"),
                    ("health_status", "health_status_id, recorded_at, cpu_pct, memory_pct, disk_pct, cycle_seconds, "
                                      "tickers_checked, tickers_bad, api_calls, rate_limit_remaining, errors, "
                                      "db_used_mb, db_max_mb")]

@@ -13,10 +13,11 @@ from risk.decisions import RiskRequest
 from risk.manager import GUARDRAILS, decide
 from strategies.signals import Signal
 
-DAY_PRIORITY = ["check_mode", "check_kill_switch", "check_audit_mismatch", "check_drawdown", "check_daily_halt", "check_leverage",
-                "check_buying_power", "check_budget", "check_max_positions", "check_ticker_exposure",
-                "check_positions_per_ticker", "check_cooldown", "check_quantity", "check_order_size"]
-"""The day guardrails in the agreed priority order (redesign plan, R1 and R2 decisions)"""
+DAY_PRIORITY = ["check_mode", "check_kill_switch", "check_audit_mismatch", "check_audit_failure", "check_drawdown",
+                "check_daily_halt", "check_leverage", "check_buying_power", "check_budget", "check_max_positions",
+                "check_ticker_exposure", "check_positions_per_ticker", "check_cooldown", "check_quantity",
+                "check_order_size"]
+"""The day guardrails in the agreed priority order (redesign plan, R1, R2 and A3 decisions)"""
 
 def test_day_guardrails_follow_priority_order():
     """Keep the day guardrails in priority order, since failed_checks[0] becomes the skip reason"""

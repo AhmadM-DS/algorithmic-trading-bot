@@ -10,9 +10,10 @@ from datetime import datetime, timezone
 from risk.context import OpenPosition, RecentExit, RiskContext, StrategyState
 from risk.decisions import RiskRequest
 from audit import ShareCounts
-from risk.guardrails import (check_audit_mismatch, check_budget, check_buying_power, check_daily_halt, check_drawdown, check_kill_switch,
-                             check_leverage, check_max_positions, check_mode, check_cooldown, check_order_size,
-                             check_positions_per_ticker, check_quantity, check_ticker_exposure, cooldown_parameter)
+from risk.guardrails import (check_audit_failure, check_audit_mismatch, check_budget, check_buying_power,
+                             check_cooldown, check_daily_halt, check_drawdown, check_kill_switch, check_leverage,
+                             check_max_positions, check_mode, check_order_size, check_positions_per_ticker,
+                             check_quantity, check_ticker_exposure, cooldown_parameter)
 from strategies.signals import Signal
 
 LIVE = 3
@@ -363,6 +364,22 @@ def test_share_mismatch_leaves_other_tickers_alone():
     context = _context(share_mismatches={"ABC": ShareCounts(alpaca=70, database=100)})
 
     reason = check_audit_mismatch(_buy("AAPL"), context, 5)
+
+    assert reason is None
+
+def test_open_audit_failure_blocks_buys_of_that_ticker():
+    """Block a buy with "audit_failure" while an end-of-day audit failure on its ticker is open"""
+    context = _context(audit_failure_tickers=frozenset({"AAPL"}))
+
+    reason = check_audit_failure(_buy("AAPL"), context, 5)
+
+    assert reason == "audit_failure"
+
+def test_open_audit_failure_leaves_other_tickers_alone():
+    """Let a buy of another ticker through: the audit block is per ticker"""
+    context = _context(audit_failure_tickers=frozenset({"ABC"}))
+
+    reason = check_audit_failure(_buy("AAPL"), context, 5)
 
     assert reason is None
 

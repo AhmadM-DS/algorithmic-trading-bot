@@ -14,7 +14,9 @@ import pandas as pd
 
 #Local Imports
 from storage.connections import to_db_time
-from storage.fills import FILL_EVENT_TYPES
+from storage.fills import ACTIVITY_FILL_TYPES, FILL_EVENT_TYPES
+
+UNREADABLE_ERRORS = (KeyError, TypeError, ValueError, ArithmeticError, AttributeError)
 
 @dataclass(frozen=True)
 class TradeUpdate:
@@ -85,21 +87,22 @@ def from_stream(data: dict) -> TradeUpdate:
         fill_price=_decimal(data.get("price")),
     )
 
-def from_activity(activity: dict) -> TradeUpdate:
-    """Read one FILL account activity, as the catch-up gets them
+def from_activity(activity: dict, event_type: str = "catch_up_fill") -> TradeUpdate:
+    """Read one FILL account activity, as the catch-up and the end-of-day audit get them
 
     The activity ID is "<timestamp>::<execution_id>", so the part after "::" is the same fill ID the stream
     sends (checked on paper Oct 30). An activity has no client_order_id, order type or average price.
 
     Parameters:
-        activity (dict): One item from /account/activities/FILL
+        activity (dict): One FILL activity from Alpaca
+        event_type (str): "catch_up_fill" (the fill stream's catch-up) or "audit_fill" (the end-of-day audit)
 
     Returns:
-        A TradeUpdate with event_type "catch_up_fill"
+        A TradeUpdate with that event_type
     """
     filled = _shares(activity["cum_qty"])
     return TradeUpdate(
-        event_type="catch_up_fill",
+        event_type=event_type,
         alpaca_order_id=activity["order_id"],
         client_order_id=None,
         ticker=activity["symbol"],
@@ -157,8 +160,8 @@ def from_saved(event_type: str, raw_json: str) -> TradeUpdate:
     Raises:
         ValueError if the row isn't a fill event
     """
-    if event_type == "catch_up_fill":
-        return from_activity(json.loads(raw_json))
+    if event_type in ACTIVITY_FILL_TYPES:
+        return from_activity(json.loads(raw_json), event_type=event_type)
     if event_type in FILL_EVENT_TYPES:
         return from_stream(json.loads(raw_json))
     raise ValueError(f"Can't rebuild a {event_type!r} event. Expected one of {list(FILL_EVENT_TYPES)}")

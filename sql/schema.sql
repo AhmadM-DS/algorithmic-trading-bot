@@ -459,24 +459,87 @@ GO
 
 CREATE TABLE audit_log
 (
-    audit_id          INT IDENTITY(1,1) NOT NULL,
-    audit_date        DATE          NOT NULL,
-    audit_type        NVARCHAR(20)  NOT NULL,
-    run_at            DATETIME2     NOT NULL CONSTRAINT df_audit_log_run_at DEFAULT SYSUTCDATETIME(),
-    fills_at_alpaca   INT           NOT NULL,
-    fills_in_db       INT           NOT NULL,
-    missing_in_db     INT           NOT NULL,
-    missing_at_alpaca INT           NOT NULL,
-    [status]          NVARCHAR(10)  NOT NULL,
-    notes             NVARCHAR(MAX) NULL,
-    resolved_at       DATETIME2     NULL,
+    audit_id            INT IDENTITY(1,1) NOT NULL,
+    audit_date          DATE          NOT NULL,
+    audit_type          NVARCHAR(20)  NOT NULL,
+    run_at              DATETIME2     NOT NULL CONSTRAINT df_audit_log_run_at DEFAULT SYSUTCDATETIME(),
+    fills_at_alpaca     INT           NULL,
+    fills_in_db         INT           NULL,
+    missing_in_db       INT           NULL,
+    missing_at_alpaca   INT           NULL,
+    [status]            NVARCHAR(10)  NOT NULL,
+    notes               NVARCHAR(MAX) NULL,
+    resolved_at         DATETIME2     NULL,
+    not_run_reason      NVARCHAR(250) NULL,
+    catch_up_fills      INT           NULL,
+    audit_fills         INT           NULL,
+    price_mismatches    INT           NULL,
+    quantity_mismatches INT           NULL,
+    share_mismatches    INT           NULL,
+    alpaca_cash         DECIMAL(19,4) NULL,
+    expected_cash       DECIMAL(19,4) NULL,
     CONSTRAINT pk_audit_log PRIMARY KEY (audit_id),
     CONSTRAINT ck_audit_log_audit_type CHECK (audit_type IN ('end_of_day', 'catch_up')),
-    CONSTRAINT ck_audit_log_status CHECK ([status] IN ('pass', 'fail'))
+    CONSTRAINT ck_audit_log_status CHECK ([status] IN ('pass', 'fail', 'not_run')),
+    CONSTRAINT ck_audit_log_not_run CHECK (
+        ([status] = 'not_run' AND not_run_reason IS NOT NULL
+            AND fills_at_alpaca IS NULL AND fills_in_db IS NULL AND missing_in_db IS NULL
+            AND missing_at_alpaca IS NULL AND catch_up_fills IS NULL AND audit_fills IS NULL
+            AND price_mismatches IS NULL AND quantity_mismatches IS NULL AND share_mismatches IS NULL
+            AND alpaca_cash IS NULL)
+        OR
+        ([status] <> 'not_run' AND not_run_reason IS NULL
+            AND fills_at_alpaca IS NOT NULL AND fills_in_db IS NOT NULL AND missing_in_db IS NOT NULL
+            AND missing_at_alpaca IS NOT NULL AND catch_up_fills IS NOT NULL AND audit_fills IS NOT NULL
+            AND price_mismatches IS NOT NULL AND quantity_mismatches IS NOT NULL)
+    ),
+    CONSTRAINT ck_audit_log_cash CHECK (
+        (alpaca_cash IS NULL AND expected_cash IS NULL) OR (alpaca_cash IS NOT NULL AND expected_cash IS NOT NULL)
+    ),
+    CONSTRAINT ck_audit_log_resolved CHECK (resolved_at IS NULL OR [status] = 'fail')
 );
 GO
 
 CREATE INDEX ix_audit_log_audit_date ON audit_log (audit_date);
+GO
+
+CREATE TABLE audit_failures
+(
+    audit_failure_id INT IDENTITY(1,1) NOT NULL,
+    audit_id         INT           NOT NULL,
+    kind             NVARCHAR(30)  NOT NULL,
+    ticker           NVARCHAR(10)  NULL,
+    alpaca_fill_id   NVARCHAR(128) NULL,
+    details          NVARCHAR(MAX) NULL,
+    CONSTRAINT pk_audit_failures PRIMARY KEY (audit_failure_id),
+    CONSTRAINT fk_audit_failures_audit_id FOREIGN KEY (audit_id) REFERENCES audit_log (audit_id),
+    CONSTRAINT ck_audit_failures_kind CHECK (kind IN ('missing_in_db', 'missing_at_alpaca', 'price_mismatch',
+        'quantity_mismatch', 'order_fill_mismatch', 'share_mismatch', 'cash', 'unreadable_activity',
+        'untracked_symbol')),
+    CONSTRAINT ck_audit_failures_ticker CHECK (
+        (kind IN ('cash', 'unreadable_activity', 'untracked_symbol') AND ticker IS NULL)
+        OR (kind NOT IN ('cash', 'unreadable_activity', 'untracked_symbol') AND ticker IS NOT NULL)
+    )
+);
+GO
+
+CREATE INDEX ix_audit_failures_audit_id ON audit_failures (audit_id);
+CREATE INDEX ix_audit_failures_ticker ON audit_failures (ticker);
+GO
+
+CREATE TABLE cash_adjustments
+(
+    cash_adjustment_id INT IDENTITY(1,1) NOT NULL,
+    amount             DECIMAL(19,4) NOT NULL,
+    effective_date     DATE          NOT NULL,
+    reason             NVARCHAR(30)  NOT NULL,
+    note               NVARCHAR(250) NULL,
+    created_at         DATETIME2     NOT NULL CONSTRAINT df_cash_adjustments_created_at DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT pk_cash_adjustments PRIMARY KEY (cash_adjustment_id),
+    CONSTRAINT ck_cash_adjustments_amount CHECK (amount <> 0),
+    CONSTRAINT ck_cash_adjustments_reason CHECK (reason IN ('deposit', 'withdrawal', 'fee', 'dividend', 'interest',
+        'correction', 'other'))
+);
 GO
 
 CREATE TABLE health_status
@@ -533,7 +596,8 @@ VALUES
     (20, 'not_tradable',             'Alpaca can''t trade this ticker',             190),
     (21, 'open_order',               'An order for this is already out',            200),
     (22, 'stale_price',              'No recent trade to check the price against',  210),
-    (23, 'price_moved',              'Price moved too far since the signal',        220);
+    (23, 'price_moved',              'Price moved too far since the signal',        220),
+    (24, 'audit_failure',            'An audit found this ticker''s records wrong', 45);
 GO
 
 CREATE TRIGGER trg_strategies_budget_set_at ON strategies

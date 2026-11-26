@@ -50,14 +50,20 @@ class BrokerOrder:
 
 @dataclass(frozen=True)
 class BrokerAccount:
-    """The account numbers risk reads: worth now, worth at yesterday's close, and what Alpaca lets it spend"""
+    """The account numbers risk reads (worth now, worth at yesterday's close, what Alpaca lets it spend), plus the
+    cash the end-of-day audit compares"""
     equity: Decimal
     last_equity: Decimal
     buying_power: Decimal
+    cash: Decimal | None = None
 
 def _to_decimal(value) -> Decimal | None:
     """Turn one of Alpaca's number strings into a Decimal, keeping None"""
     return None if value is None else Decimal(str(value))
+
+def _alpaca_time(moment: datetime) -> str:
+    """Format a naive UTC time the way Alpaca's activity filters take it"""
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 def _to_broker_order(order) -> BrokerOrder:
     """Copy an alpaca-py Order (and its legs) into a BrokerOrder"""
@@ -227,11 +233,35 @@ class AlpacaBroker:
         Raises:
             BrokerUnavailable if Alpaca can't be asked
         """
-        params = {"after": since.strftime("%Y-%m-%dT%H:%M:%SZ"), "direction": "asc", "page_size": ACTIVITY_PAGE_SIZE}
+        params = {"after": _alpaca_time(since), "direction": "asc", "page_size": ACTIVITY_PAGE_SIZE}
+        return self._read_activities("/account/activities/FILL", params)
+
+    def get_activities(self, since: datetime, until: datetime) -> list:
+        """Return every account activity of every type between two times, oldest first, reading every page
+
+        Fills come with a transaction_time; other activities (deposits, fees, dividends, splits) with only a date.
+
+        Parameters:
+            since (datetime): Naive UTC; only activities after this time
+            until (datetime): Naive UTC; only activities up to this time
+
+        Returns:
+            A list of Alpaca's activity dicts, e.g. {"id": ..., "activity_type": "FEE", "date": "2026-11-24",
+            "net_amount": "-0.02", ...}
+
+        Raises:
+            BrokerUnavailable if Alpaca can't be asked
+        """
+        params = {"after": _alpaca_time(since), "until": _alpaca_time(until), "direction": "asc",
+                  "page_size": ACTIVITY_PAGE_SIZE}
+        return self._read_activities("/account/activities", params)
+
+    def _read_activities(self, path: str, params: dict) -> list:
+        """Read one activities endpoint page by page until a page comes back short"""
         activities = []
         while True:
             try:
-                page = self._call(self.client.get, "/account/activities/FILL", params)
+                page = self._call(self.client.get, path, params)
             except OrderRejected as error:
                 raise BrokerUnavailable(f"Activities refused: {error}") from error
             activities += page
@@ -253,7 +283,7 @@ class AlpacaBroker:
         except OrderRejected as error:
             raise BrokerUnavailable(f"Account lookup refused: {error}") from error
         return BrokerAccount(equity=_to_decimal(account.equity), last_equity=_to_decimal(account.last_equity),
-                             buying_power=_to_decimal(account.buying_power))
+                             buying_power=_to_decimal(account.buying_power), cash=_to_decimal(account.cash))
 
     def get_positions(self) -> dict:
         """Return how many shares Alpaca holds of each ticker, for the whole account

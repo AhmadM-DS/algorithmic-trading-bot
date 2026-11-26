@@ -13,6 +13,19 @@ import pyodbc
 #Local Imports
 from logger import db_log
 
+def is_connection_error(e) -> bool:
+    """Check whether a database error means the connection is gone or unusable (link failure, timeout, driver)
+
+    Errors about the data itself (too long, a CHECK, a duplicate) return False.
+
+    Parameters:
+        e (pyodbc.Error): The caught database error
+
+    Returns:
+        True if the connection failed
+    """
+    return isinstance(e, (pyodbc.OperationalError, pyodbc.InterfaceError))
+
 def is_duplicate_error(e):
     """Check whether a database error is a UNIQUE violation
 

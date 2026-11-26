@@ -62,6 +62,19 @@ def check_audit_mismatch(request: RiskRequest, context: RiskContext, quantity: i
     """
     return "audit_mismatch" if request.signal.ticker in context.share_mismatches else None
 
+def check_audit_failure(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
+    """Block buys of a ticker with an open end-of-day audit failure, until a re-audit or the owner resolves it
+
+    Parameters:
+        request (RiskRequest): The buy being checked
+        context (RiskContext): This cycle's snapshot
+        quantity (int): The sizer's share count
+
+    Returns:
+        "audit_failure" if the ticker has an open audit failure, None otherwise
+    """
+    return "audit_failure" if request.signal.ticker in context.audit_failure_tickers else None
+
 def check_drawdown(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
     """Block a strategy's buys once it has fallen its drawdown limit below its peak, until the admin re-sets its budget
 
