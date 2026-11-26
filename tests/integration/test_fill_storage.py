@@ -181,3 +181,12 @@ def test_unhandled_fills_leave_out_messages_saved_unreadable(bot_conn):
     raw_fill(bot_conn, "fill", "readable")
 
     assert [row["event_type"] for row in get_unhandled_fills(bot_conn)] == ["fill"]
+
+@pytest.mark.parametrize("event_type", ["untracked_fill", "untracked_partial_fill", "untracked_catch_up_fill",
+                                        "untracked_audit_fill"])
+def test_untracked_fill_counts_as_seen_but_not_as_unhandled(bot_conn, event_type):
+    """Count a fill kept raw only (an option) as seen, whatever its source, so the catch-up skips it, and leave it
+    out of the retry pass"""
+    raw_fill(bot_conn, event_type, "exec-opt")
+
+    assert (fill_seen(bot_conn, "exec-opt"), get_unhandled_fills(bot_conn)) == (True, [])

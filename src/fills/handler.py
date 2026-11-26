@@ -13,10 +13,11 @@ from config.constants import UNKNOWN_ORDER_WAIT_SECONDS
 from data.market_calendar import NEW_YORK
 from logger import trades_log
 from storage.connections import is_duplicate_error
-from storage.fills import (add_to_position, close_position, find_order_row, get_entry_defaults,
-                           get_open_positions_for_ticker, get_order_position, get_position, get_position_totals,
-                           get_strategy_id, insert_position, insert_trade, save_broker_event, set_legs_position,
-                           set_order_position, set_order_price_from_trades, trade_exists, update_order_from_broker)
+from storage.fills import (TICKER_LENGTH, UNTRACKED_PREFIX, add_to_position, close_position, fill_seen,
+                           find_order_row, fits_ticker, get_entry_defaults, get_open_positions_for_ticker,
+                           get_order_position, get_position, get_position_totals, get_strategy_id, insert_position,
+                           insert_trade, save_broker_event, set_legs_position, set_order_position,
+                           set_order_price_from_trades, trade_exists, update_order_from_broker)
 from storage.orders import insert_order, save_rejection
 from storage.watchlist import get_or_create_ticker
 
@@ -29,7 +30,8 @@ class HandleResult:
 
     outcome is one of: "handled", "duplicate" (fill already saved), "waiting" (no order row yet; retried),
     "no_order" (a non-fill event for an order the bot doesn't have), "unresolved" (needs a person; alerted),
-    "failed" (an error; rolled back and retried).
+    "failed" (an error; rolled back and retried), "untracked" (a symbol too long to record, e.g. an option; kept
+    raw only).
     alerts is a list of (channel, message), channel "critical" or "trades".
     """
     outcome: str
@@ -193,6 +195,39 @@ def handle_update(conn, update, now: datetime, wait_seconds: int = UNKNOWN_ORDER
     _status_alerts(conn, order, update, alerts)
     return HandleResult(outcome, alerts)
 
+def _untracked_alert(update) -> str:
+    """Return the alert for an option fill kept raw only, with what the owner needs to find it"""
+    at = f" at {update.event_at:%Y-%m-%d %H:%M} UTC" if update.event_at else ""
+    return (f"A {update.side} fill of {update.fill_quantity} {update.ticker} at {update.fill_price}{at} (order "
+            f"{update.alpaca_order_id}, fill {update.execution_id}) can't be recorded: the bot trades stocks and the "
+            f"symbol is longer than {TICKER_LENGTH} characters (an option). Saved raw in broker_events; check it by "
+            "hand.")
+
+def _keep_untracked(conn, update, save_raw: bool) -> HandleResult:
+    """Keep an update whose symbol doesn't fit the ticker columns (an option) raw, with no ticker, and record nothing
+
+    A fill is saved as "untracked_" + its own type (the row's shape stays readable): the catch-up counts it as seen
+    and the retry pass never handles it. Its alert goes out the first time the fill is saved; a fill seen again is
+    saved raw again without one. Other events of such an order (new, canceled) are saved under their own type with
+    no alert: only fills change the records.
+    """
+    already_seen = update.is_fill and fill_seen(conn, update.execution_id)
+    if save_raw:
+        try:
+            save_broker_event(conn, event_type=UNTRACKED_PREFIX + update.event_type if update.is_fill
+                              else update.event_type, alpaca_order_id=update.alpaca_order_id,
+                              client_order_id=update.client_order_id, execution_id=update.execution_id, ticker=None,
+                              event_at=update.event_at, raw_json=update.raw_json)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    trades_log.warning(f"{update.event_type} for {update.ticker!r} ({update.alpaca_order_id}) kept raw only: the "
+                       f"symbol doesn't fit the ticker columns ({TICKER_LENGTH} characters)")
+    if not update.is_fill or already_seen:
+        return HandleResult("untracked")
+    return HandleResult("untracked", [("critical", _untracked_alert(update))])
+
 def process_update(conn, update, now: datetime, save_raw: bool = True,
                    wait_seconds: int = UNKNOWN_ORDER_WAIT_SECONDS) -> HandleResult:
     """Save an update raw, then handle it in its own transaction
@@ -214,6 +249,8 @@ def process_update(conn, update, now: datetime, save_raw: bool = True,
     Raises:
         pyodbc.Error if the raw row itself can't be saved (the catch-up recovers the event later)
     """
+    if update.ticker is not None and not fits_ticker(update.ticker):
+        return _keep_untracked(conn, update, save_raw)
     if save_raw:
         save_broker_event(conn, event_type=update.event_type, alpaca_order_id=update.alpaca_order_id,
                           client_order_id=update.client_order_id, execution_id=update.execution_id,

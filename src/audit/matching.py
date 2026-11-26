@@ -16,9 +16,9 @@ import pandas as pd
 #Local Imports
 from data.market_calendar import NEW_YORK
 from fills.events import UNREADABLE_ERRORS
+from storage.fills import TICKER_LENGTH, fits_ticker
 
 PRICE_PLACES = Decimal("0.0001")
-TICKER_LENGTH = 10
 ACTIVITY_TYPE_LENGTH = 10
 ID_LENGTH = 128
 LARGEST_AMOUNT = Decimal("1e15")
@@ -109,10 +109,6 @@ def _side(value) -> str | None:
     if value is None:
         return None
     return "buy" if value == "buy" else "sell"
-
-def fits_ticker(symbol) -> bool:
-    """Return True if a symbol fits the ticker column; an option's longer symbol doesn't"""
-    return symbol is not None and len(symbol) <= TICKER_LENGTH
 
 def _ticker(symbol) -> str | None:
     """Return the symbol if it fits the ticker column; an option's longer symbol stays only in the raw JSON"""
