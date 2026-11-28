@@ -11,7 +11,10 @@ from zoneinfo import ZoneInfo
 from alpaca.trading.requests import GetCalendarRequest
 import pandas as pd
 
-NEW_YORK = "America/New_York"
+#Local Imports
+from config.constants import MARKET_TIME_ZONE
+
+NEW_YORK = MARKET_TIME_ZONE
 SESSION_TIME_FRAMES = ("1Day", "1Week", "1Month")
 
 def get_calendar(trading_client, start: date, end: date) -> dict:

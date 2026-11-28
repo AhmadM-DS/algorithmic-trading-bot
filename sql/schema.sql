@@ -546,22 +546,61 @@ CREATE TABLE health_status
 (
     health_status_id     INT IDENTITY(1,1) NOT NULL,
     recorded_at          DATETIME2    NOT NULL CONSTRAINT df_health_status_recorded_at DEFAULT SYSUTCDATETIME(),
-    cpu_pct              DECIMAL(5,2) NOT NULL,
-    memory_pct           DECIMAL(5,2) NOT NULL,
-    disk_pct             DECIMAL(5,2) NOT NULL,
+    cpu_pct              DECIMAL(5,2) NULL,
+    memory_pct           DECIMAL(5,2) NULL,
+    disk_pct             DECIMAL(5,2) NULL,
     cycle_seconds        DECIMAL(7,2) NULL,
     tickers_checked      INT          NULL,
     tickers_bad          INT          NULL,
     api_calls            INT          NOT NULL,
-    rate_limit_remaining INT          NOT NULL,
+    rate_limit_remaining INT          NULL,
     errors               INT          NOT NULL,
-    db_used_mb           INT          NOT NULL,
-    db_max_mb            INT          NOT NULL,
-    CONSTRAINT pk_health_status PRIMARY KEY (health_status_id)
+    db_used_mb           INT          NULL,
+    db_max_mb            INT          NULL,
+    process              NVARCHAR(20) NOT NULL,
+    CONSTRAINT pk_health_status PRIMARY KEY (health_status_id),
+    CONSTRAINT ck_health_status_process CHECK (process IN ('bot', 'fill_stream'))
 );
 GO
 
 CREATE INDEX ix_health_status_recorded_at ON health_status (recorded_at);
+CREATE INDEX ix_health_status_process_recorded_at ON health_status (process, recorded_at);
+GO
+
+-- The long-term archive of health_status: raw rows are deleted after the rollup, so this is the only copy.
+CREATE TABLE health_status_hourly
+(
+    health_status_hourly_id  INT IDENTITY(1,1) NOT NULL,
+    process                  NVARCHAR(20) NOT NULL,
+    hour_start               DATETIME2(0) NOT NULL,
+    beats                    INT          NOT NULL,
+    cycles                   INT          NOT NULL,
+    cpu_pct_min              DECIMAL(5,2) NULL,
+    cpu_pct_avg              DECIMAL(5,2) NULL,
+    cpu_pct_max              DECIMAL(5,2) NULL,
+    memory_pct_min           DECIMAL(5,2) NULL,
+    memory_pct_avg           DECIMAL(5,2) NULL,
+    memory_pct_max           DECIMAL(5,2) NULL,
+    disk_pct_min             DECIMAL(5,2) NULL,
+    disk_pct_avg             DECIMAL(5,2) NULL,
+    disk_pct_max             DECIMAL(5,2) NULL,
+    cycle_seconds_min        DECIMAL(7,2) NULL,
+    cycle_seconds_avg        DECIMAL(7,2) NULL,
+    cycle_seconds_max        DECIMAL(7,2) NULL,
+    api_calls_max            INT          NOT NULL,
+    rate_limit_remaining_min INT          NULL,
+    errors                   INT          NOT NULL,
+    db_used_mb_max           INT          NULL,
+    db_max_mb                INT          NULL,
+    rolled_up_at             DATETIME2    NOT NULL CONSTRAINT df_health_status_hourly_rolled_up_at DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT pk_health_status_hourly PRIMARY KEY (health_status_hourly_id),
+    CONSTRAINT uq_health_status_hourly_process_hour UNIQUE (process, hour_start),
+    CONSTRAINT ck_health_status_hourly_process CHECK (process IN ('bot', 'fill_stream')),
+    CONSTRAINT ck_health_status_hourly_hour_start CHECK (DATEPART(minute, hour_start) = 0
+                                                         AND DATEPART(second, hour_start) = 0),
+    CONSTRAINT ck_health_status_hourly_beats CHECK (beats > 0),
+    CONSTRAINT ck_health_status_hourly_cycles CHECK (cycles BETWEEN 0 AND beats)
+);
 GO
 
 -- 'swing' so the end-of-day job never closes a position the bot didn't open.
@@ -597,7 +636,8 @@ VALUES
     (21, 'open_order',               'An order for this is already out',            200),
     (22, 'stale_price',              'No recent trade to check the price against',  210),
     (23, 'price_moved',              'Price moved too far since the signal',        220),
-    (24, 'audit_failure',            'An audit found this ticker''s records wrong', 45);
+    (24, 'audit_failure',            'An audit found this ticker''s records wrong', 45),
+    (25, 'database_write_failed',    'A database save is failing',                  35);
 GO
 
 CREATE TRIGGER trg_strategies_budget_set_at ON strategies

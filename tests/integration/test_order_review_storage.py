@@ -183,10 +183,11 @@ def test_sync_switches_tickers_off_and_back_on(bot_conn):
     saved = {row.ticker for row in bot_conn.execute("SELECT ticker FROM tickers").fetchall()}
     tradable = (saved - {"ZZZQ"}) | {"BACK"}
 
-    changes = sync_tradable(conn, tradable, alert=sent.append)
+    changes = sync_tradable(conn, tradable, notify=lambda kind, message, asset=None: sent.append((kind, message)))
 
     states = dict(bot_conn.execute("SELECT ticker, is_active FROM tickers WHERE ticker IN ('ZZZQ', 'BACK')").fetchall())
-    assert (changes, states, len(sent)) == ({"off": ["ZZZQ"], "on": ["BACK"]}, {"ZZZQ": False, "BACK": True}, 1)
+    assert (changes, states, [kind for kind, _ in sent]) == \
+           ({"off": ["ZZZQ"], "on": ["BACK"]}, {"ZZZQ": False, "BACK": True}, ["health"])
     assert (len(events(bot_conn, "ticker_not_tradable")), len(events(bot_conn, "ticker_tradable"))) == (1, 1)
 
 def test_sync_never_touches_the_admins_blacklist(bot_conn):
@@ -196,14 +197,16 @@ def test_sync_never_touches_the_admins_blacklist(bot_conn):
     bot_conn.execute("EXECUTE AS USER = 'test_bot';")
     saved = {row.ticker for row in bot_conn.execute("SELECT ticker FROM tickers").fetchall()}
 
-    sync_tradable(CommitCounter(bot_conn), saved, alert=lambda message: None)
+    sync_tradable(CommitCounter(bot_conn), saved, notify=lambda kind, message, asset=None: None)
 
     assert bot_conn.execute("SELECT fill_override FROM tickers WHERE ticker = 'GME'").fetchone()[0] == False
 
 def test_empty_tradable_list_changes_nothing(bot_conn):
     ticker_id(bot_conn, "AAPL")
 
-    assert sync_tradable(CommitCounter(bot_conn), set(), alert=lambda message: None) == {"off": [], "on": []}
+    changes = sync_tradable(CommitCounter(bot_conn), set(), notify=lambda kind, message, asset=None: None)
+
+    assert changes == {"off": [], "on": []}
 
 def test_new_screener_hit_alpaca_cant_trade_stays_off_the_watchlist(bot_conn):
     final = build_watchlist(bot_conn, ["ZZZQ", "KTTA"], date(2026, 11, 9), "biggest-gainers", 3, 20,

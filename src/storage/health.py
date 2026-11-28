@@ -1,6 +1,6 @@
 """
 health.py
-Write to the data_health table
+Write to the data_health table and read the database's own size
 """
 
 #Third Party Libraries
@@ -33,3 +33,23 @@ def insert_data_health(conn, ticker, row):
          row["lag_seconds"], row["market_data_plan"], row["status"], ticker_id),
     )
     db_log.debug(f"data_health saved: {ticker} {row['time_frame']} {row['status']}")
+
+def database_size(conn) -> tuple:
+    """Return the space the database's data files use and the most it may grow to, in MB
+
+    Only data files count (not the log), as Azure's size limit does. The max comes from the server, never a fixed
+    number, so a tier change moves it by itself.
+
+    Parameters:
+        conn (Connection): An open database connection
+
+    Returns:
+        (used_mb, max_mb); max_mb is None when the server reports no limit (SQL Express gives NULL, unlimited is -1)
+    """
+    row = conn.cursor().execute(
+        "SELECT CAST(SUM(CAST(FILEPROPERTY(name, 'SpaceUsed') AS BIGINT)) * 8 / 1024 AS INT) AS used_mb, "
+        "CAST(DATABASEPROPERTYEX(DB_NAME(), 'MaxSizeInBytes') AS BIGINT) AS max_bytes "
+        "FROM sys.database_files WHERE type = 0"
+    ).fetchone()
+    max_mb = row.max_bytes // (1024 * 1024) if row.max_bytes and row.max_bytes > 0 else None
+    return row.used_mb, max_mb

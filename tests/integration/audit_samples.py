@@ -82,3 +82,14 @@ class Alerts:
 
     def __call__(self, message):
         self.sent.append(message)
+
+class Notes:
+    """Records non-critical messages with their kind and asset instead of sending them"""
+
+    def __init__(self):
+        self.sent = []
+        self.routes = []
+
+    def __call__(self, kind, message, asset=None):
+        self.sent.append(message)
+        self.routes.append((kind, asset))

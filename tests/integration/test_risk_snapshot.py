@@ -23,9 +23,8 @@ class AlertRecorder:
         self.conn = conn
         self.sent = []
 
-    def channels(self):
-        return {"critical": lambda message: self.sent.append(("critical", message, self.conn.commits)),
-                "trades": lambda message: self.sent.append(("trades", message, self.conn.commits))}
+    def notify(self, kind, message, asset=None):
+        self.sent.append((kind, message, self.conn.commits))
 
 @pytest.fixture
 def conn(bot_conn):
@@ -104,7 +103,7 @@ def test_daily_halt_trips_at_three_percent_loss(conn):
     context = build(conn)
 
     assert state(context, strategy_id).halted_holding_types == frozenset({"day"})
-    assert [(e.event_type, e.channel) for e in context.events] == [("daily_halt_day", "trades")]
+    assert [(e.event_type, e.channel) for e in context.events] == [("daily_halt_day", "health")]
 
 def test_daily_halt_stays_off_above_the_loss_limit(conn):
     """Keep trading at -$7 today"""
@@ -209,7 +208,7 @@ def test_scale_down_stop_is_alerted_once(conn):
 
     context = build(conn)
 
-    assert event_types(context) == ["scale_down_stopped"]
+    assert [(e.event_type, e.channel) for e in context.events] == [("scale_down_stopped", "health")]
 
 def test_shadow_strategy_is_never_halted(conn):
     """Leave a shadow strategy with no halts or events, whatever it lost (it trades no real money)"""
@@ -227,7 +226,7 @@ def test_budget_full_is_alerted_when_less_than_a_slot_is_left(conn):
 
     context = build(conn)
 
-    assert event_types(context) == ["budget_full"]
+    assert [(e.event_type, e.channel) for e in context.events] == [("budget_full", "health")]
 
 def test_budget_full_is_not_repeated(conn):
     """Send nothing while the newest row already says budget_full"""
@@ -246,7 +245,7 @@ def test_budget_room_is_alerted_when_a_slot_fits_again(conn):
 
     context = build(conn)
 
-    assert event_types(context) == ["budget_room"]
+    assert [(e.event_type, e.channel) for e in context.events] == [("budget_room", "health")]
 
 def test_previous_parameters_are_in_the_snapshot(conn):
     """Load yesterday's last value so the rate limit has something to compare with"""
@@ -286,7 +285,7 @@ def test_record_saves_each_event_then_alerts_after_the_commit(conn):
     recorder = AlertRecorder(conn)
     context = build(conn, FakeBroker(equity="940", last_equity="1000"))
 
-    saved = record_risk_events(conn, context, recorder.channels())
+    saved = record_risk_events(conn, context, recorder.notify)
 
     assert (saved, len(events(conn, "kill_switch"))) == (1, 1)
     assert [(channel, commits) for channel, _, commits in recorder.sent] == [("critical", 1)]
@@ -294,7 +293,7 @@ def test_record_saves_each_event_then_alerts_after_the_commit(conn):
 def test_recorded_event_locks_the_next_cycle(conn):
     """Find no new event on the next cycle once the row is saved, so the alert isn't repeated"""
     recorder = AlertRecorder(conn)
-    record_risk_events(conn, build(conn, FakeBroker(equity="940", last_equity="1000")), recorder.channels())
+    record_risk_events(conn, build(conn, FakeBroker(equity="940", last_equity="1000")), recorder.notify)
 
     context = build(conn, FakeBroker(equity="940", last_equity="1000"))
 
@@ -304,7 +303,7 @@ def test_record_with_no_events_writes_nothing(conn):
     """Commit nothing and alert nothing on a quiet cycle"""
     recorder = AlertRecorder(conn)
 
-    saved = record_risk_events(conn, build(conn), recorder.channels())
+    saved = record_risk_events(conn, build(conn), recorder.notify)
 
     assert (saved, conn.commits, recorder.sent) == (0, 0, [])
 

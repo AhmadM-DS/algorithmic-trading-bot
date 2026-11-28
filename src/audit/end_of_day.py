@@ -26,9 +26,9 @@ from config.constants import (ACTIVITY_LOOKBACK_DAYS, AUDIT_CATCH_UP_MAX_DAYS, A
 from data.market_calendar import NEW_YORK, session_times
 from execution.broker import BrokerError
 from fills.events import from_activity, from_saved
-from fills.handler import HandleResult, process_update
+from fills.handler import Alert, HandleResult, process_update
 from logger import audit_log
-from notifications import send_critical, send_trades
+from notifications import send, send_critical
 from storage.audit import (count_audit_fills, count_catch_up_fills, get_cash_baseline, get_cash_movements,
                            get_database_shares, get_dated_activities, get_first_activity_time, get_latest_audits,
                            get_open_audits, get_open_failure_keys, get_open_failure_tickers, get_order_fill_mismatches,
@@ -127,7 +127,7 @@ def _repair(conn, fills: list, now: datetime, send, alerted: set) -> list:
             _rollback(conn)
             audit_log.error(f"Audit couldn't record fill {fill.fill_id} ({fill.ticker}): {type(error).__name__}: "
                             f"{error}")
-            result = HandleResult("failed", [("critical", f"End-of-day audit couldn't record fill {fill.fill_id} "
+            result = HandleResult("failed", [Alert("critical", f"End-of-day audit couldn't record fill {fill.fill_id} "
                                                           f"({fill.ticker}): {type(error).__name__}: {error}. It stays "
                                                           "a missing_in_db failure until fixed.")])
         if result.outcome == "handled":
@@ -305,10 +305,13 @@ def _failure_message(audit_date: date, failures: list) -> str:
              if blocked else " No buys are blocked.")
     return f"End-of-day audit of {audit_date} failed: " + "; ".join(_failure_line(f) for f in failures) + "." + block
 
-def _send_all(alerts: list, alert, note):
-    """Send the fill handler's (channel, message) alerts"""
-    for channel, message in alerts:
-        (alert if channel == "critical" else note)(message)
+def _send_all(alerts: list, alert, notify):
+    """Send the fill handler's alerts: critical through alert, the rest through notify with their kind and asset"""
+    for kind, message, asset in alerts:
+        if kind == "critical":
+            alert(message)
+        else:
+            notify(kind, message, asset)
 
 def _rollback(conn):
     """Undo the run's unsaved rows, ignoring a connection that's already gone"""
@@ -344,7 +347,7 @@ def _database_failed(conn, audit_date: date, error: Exception, watch: AuditWatch
     return AuditReport(audit_date, "failed", cause=cause)
 
 def run_audit(conn, broker, audit_date: date, now: datetime, calendar: dict, *, check_now: bool = True,
-              watch: AuditWatch | None = None, alert=send_critical, note=send_trades) -> AuditReport:
+              watch: AuditWatch | None = None, alert=send_critical, notify=send) -> AuditReport:
     """Audit one New York trading day against Alpaca and save the result
 
     Order: read Alpaca (activities to the day's end, or up to now with check_now, then the cash and positions); save
@@ -362,7 +365,7 @@ def run_audit(conn, broker, audit_date: date, now: datetime, calendar: dict, *, 
         check_now (bool): Also compare shares and cash as they are now; only right while the market is closed
         watch (AuditWatch | None): What earlier runs remembered; None alerts every outage
         alert (callable): Sends a critical alert; Discord by default
-        note (callable): Sends a trades-channel note; Discord by default
+        notify (callable): Sends (kind, message, asset) like notifications.send, e.g. a manual trade note
 
     Returns:
         An AuditReport
@@ -391,7 +394,7 @@ def run_audit(conn, broker, audit_date: date, now: datetime, calendar: dict, *, 
         saved = True
         known = get_open_failure_keys(conn, audit_date, any_day_kinds=ALERT_ONCE_KINDS)
         alerted = {fill_id for kind, _, fill_id in known if kind == "missing_in_db"}
-        recorded = _repair(conn, day_fills, moment, lambda alerts: _send_all(alerts, alert, note), alerted)
+        recorded = _repair(conn, day_fills, moment, lambda alerts: _send_all(alerts, alert, notify), alerted)
         if recorded:
             alert(f"End-of-day audit of {audit_date} recorded {len(recorded)} fill(s) the fill stream missed "
                   f"({', '.join(sorted(set(recorded)))}). Check that the fill stream is running.")
@@ -509,7 +512,7 @@ def days_to_audit(conn, now: datetime, calendar: dict) -> tuple:
     return [day for day in needed if day in recent], [day for day in needed if day not in recent]
 
 def catch_up_audits(conn, broker, now: datetime, calendar: dict, watch: AuditWatch, *, alert=send_critical,
-                    note=send_trades) -> list:
+                    notify=send) -> list:
     """Audit every trading day that still needs it (days_to_audit), oldest first
 
     Called at startup and at the end-of-day audit time. Days past AUDIT_CATCH_UP_MAX_DAYS get one alert. The last
@@ -524,7 +527,7 @@ def catch_up_audits(conn, broker, now: datetime, calendar: dict, watch: AuditWat
         calendar (dict): Trading days from get_calendar, reaching back past the cap
         watch (AuditWatch): What earlier runs remembered
         alert (callable): Sends a critical alert; Discord by default
-        note (callable): Sends a trades-channel note; Discord by default
+        notify (callable): Sends (kind, message, asset) like notifications.send, e.g. a manual trade note
 
     Returns:
         The AuditReport of each run, oldest first
@@ -538,7 +541,7 @@ def catch_up_audits(conn, broker, now: datetime, calendar: dict, watch: AuditWat
         for index, day in enumerate(needed):
             report = run_audit(conn, broker, day, now, calendar,
                                check_now=index == len(needed) - 1 and not market_open, watch=watch, alert=alert,
-                               note=note)
+                               notify=notify)
             reports.append(report)
             if report.cause in BATCH_STOPPING_CAUSES:
                 break

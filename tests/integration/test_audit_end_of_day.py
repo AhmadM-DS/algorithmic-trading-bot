@@ -16,7 +16,7 @@ import pytest
 #Local Imports
 import audit.end_of_day as end_of_day
 from audit import AuditWatch, audit_reminders, catch_up_audits, days_to_audit, run_audit
-from audit_samples import (AFTER_CLOSE, DAY, Alerts, FakeAuditBroker, dated_activity, fill_activity,
+from audit_samples import (AFTER_CLOSE, DAY, Alerts, Notes, FakeAuditBroker, dated_activity, fill_activity,
                            trading_calendar)
 from fill_samples import CommitCounter, add_bracket, add_sell, add_strategy, fill, order, positions
 from fills.events import from_activity
@@ -43,7 +43,7 @@ def alerts():
 
 @pytest.fixture
 def notes():
-    return Alerts()
+    return Notes()
 
 def stream(conn, update):
     """Handle one update the way the fill stream does, a second after it happened"""
@@ -60,7 +60,7 @@ def leg_fill(leg="limit", price="5.20", execution_id="exec-leg"):
 def audit(conn, broker, alerts, notes, audit_date=DAY, now=AFTER_CLOSE, watch=None, check_now=True):
     """Run one audit with the test calendar and recorded alerts"""
     return run_audit(conn, broker, audit_date, now, CALENDAR, check_now=check_now, watch=watch, alert=alerts,
-                     note=notes)
+                     notify=notes)
 
 def audit_rows(conn):
     """Return every audit_log row, oldest first"""
@@ -388,7 +388,7 @@ def test_catch_up_audits_each_missed_trading_day_skipping_the_holiday(conn, stra
     market_open = datetime(2026, 11, 30, 15, tzinfo=timezone.utc)
 
     reports = catch_up_audits(conn, FakeAuditBroker(positions={"AAPL": 10}), market_open, CALENDAR, AuditWatch(),
-                              alert=alerts, note=notes)
+                              alert=alerts, notify=notes)
 
     rows = audit_rows(conn)
     assert [r.audit_date for r in rows] == [date(2026, 11, 25), date(2026, 11, 27)]
@@ -399,7 +399,7 @@ def test_catch_up_audits_each_missed_trading_day_skipping_the_holiday(conn, stra
 def test_catch_up_after_the_close_audits_today_with_the_now_checks(conn, alerts, notes):
     """Audit today as end_of_day once the audit time has passed, with shares and cash"""
 
-    catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, note=notes)
+    catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, notify=notes)
 
     row, = audit_rows(conn)
     assert (row.audit_date, row.audit_type, row.share_mismatches) == (DAY, "end_of_day", 0)
@@ -417,7 +417,7 @@ def test_catch_up_redoes_only_days_with_an_open_failure(conn, strategy_id, alert
     next_morning = datetime(2026, 11, 3, 13, tzinfo=timezone.utc)
 
     catch_up_audits(conn, FakeAuditBroker(positions={"AAPL": 10}), next_morning, CALENDAR, AuditWatch(), alert=alerts,
-                    note=notes)
+                    notify=notes)
 
     assert [r.audit_date for r in audit_rows(conn)] == [date(2026, 10, 29), date(2026, 10, 30), DAY, DAY]
 
@@ -429,8 +429,8 @@ def test_catch_up_stops_at_the_cap_and_alerts_once(conn, strategy_id, alerts, no
     watch = AuditWatch()
 
     catch_up_audits(conn, FakeAuditBroker(positions={"AAPL": 10}), AFTER_CLOSE, CALENDAR, watch, alert=alerts,
-                    note=notes)
-    catch_up_audits(conn, FakeAuditBroker(error="down"), AFTER_CLOSE, CALENDAR, watch, alert=alerts, note=notes)
+                    notify=notes)
+    catch_up_audits(conn, FakeAuditBroker(error="down"), AFTER_CLOSE, CALENDAR, watch, alert=alerts, notify=notes)
 
     assert [r.audit_date for r in audit_rows(conn)][:3] == [date(2026, 10, 29), date(2026, 10, 30), DAY]
     assert sum("older than" in message for message in alerts.sent) == 1
@@ -441,11 +441,11 @@ def test_catch_up_stops_the_batch_when_alpaca_is_down_and_redoes_it_next_time(co
     buy = buy_fill(at="2026-10-28T15:00:00Z")
     stream(conn, buy)
     watch = AuditWatch()
-    catch_up_audits(conn, FakeAuditBroker(error="down"), AFTER_CLOSE, CALENDAR, watch, alert=alerts, note=notes)
+    catch_up_audits(conn, FakeAuditBroker(error="down"), AFTER_CLOSE, CALENDAR, watch, alert=alerts, notify=notes)
     first = [(r.audit_date, r.status) for r in audit_rows(conn)]
 
     catch_up_audits(conn, FakeAuditBroker([fill_activity(buy)], positions={"AAPL": 10}), AFTER_CLOSE, CALENDAR, watch,
-                    alert=alerts, note=notes)
+                    alert=alerts, notify=notes)
 
     assert first == [(date(2026, 10, 28), "not_run")]
     assert [(r.audit_date, r.status) for r in audit_rows(conn)][1:] == [
@@ -615,7 +615,7 @@ def test_catch_up_never_raises(conn, alerts, notes, monkeypatch):
         raise RuntimeError("calendar is empty")
     monkeypatch.setattr(end_of_day, "days_to_audit", broken)
 
-    reports = catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, note=notes)
+    reports = catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, notify=notes)
 
     assert reports == [] and len(alerts.sent) == 1 and "RuntimeError" in alerts.sent[0]
 
@@ -623,7 +623,7 @@ def test_catch_up_database_failure_says_it_couldnt_read(conn, alerts, notes, mon
     """Say the catch-up couldn't read which days need an audit, not that a day's audit couldn't save"""
     monkeypatch.setattr(end_of_day, "days_to_audit", broken_database)
 
-    catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, note=notes)
+    catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, notify=notes)
 
     assert "couldn't read which days need an audit" in alerts.sent[0]
 
@@ -707,7 +707,7 @@ def test_fill_the_audit_cant_record_fails_the_day_and_blocks_the_ticker(conn, st
     buy, target = buy_fill(), leg_fill()
     stream(conn, buy)
     monkeypatch.setattr(end_of_day, "process_update",
-                        lambda *args, **kwargs: HandleResult("failed", [("critical", "Couldn't handle a fill")]))
+                        lambda *args, **kwargs: HandleResult("failed", [("critical", "Couldn't handle a fill", None)]))
 
     report = audit(conn, FakeAuditBroker([fill_activity(buy), fill_activity(target)]), alerts, notes)
 
@@ -746,12 +746,14 @@ def test_today_is_audited_only_from_the_audit_time(conn):
     assert (before, after) == ([date(2026, 10, 30)], [DAY])
 
 def test_audits_trades_notes_go_to_the_trades_channel(conn, alerts, notes):
-    """Send the handler's "manual trade recorded" note to the trades channel and the audit's own alert to critical"""
+    """Send the handler's "manual trade recorded" note to the trades channel of its holding type, and the audit's own
+    alert to critical"""
     manual_buy = fill("dash-buy", 3, Decimal("7.00"), "exec-dash-buy", at=BUY_AT)
 
     audit(conn, FakeAuditBroker([fill_activity(manual_buy)], positions={"AAPL": 3}), alerts, notes)
 
     assert any("Manual trade recorded" in message for message in notes.sent)
+    assert notes.routes == [("trades", "swing")]
     assert any("recorded 1 fill" in message for message in alerts.sent)
 
 def test_re_audit_with_no_share_check_keeps_a_share_failure_open(conn, strategy_id, alerts, notes):
@@ -782,7 +784,7 @@ def test_batch_after_the_close_checks_shares_and_cash_on_the_last_day_only(conn,
     stream(conn, buy)
 
     catch_up_audits(conn, FakeAuditBroker([fill_activity(buy)], positions={"AAPL": 10}), AFTER_CLOSE, CALENDAR,
-                    AuditWatch(), alert=alerts, note=notes)
+                    AuditWatch(), alert=alerts, notify=notes)
 
     assert [(r.audit_date, r.share_mismatches, r.alpaca_cash is None) for r in audit_rows(conn)] == [
         (date(2026, 10, 30), None, True), (DAY, 0, False)]
@@ -858,7 +860,7 @@ def test_catch_up_goes_on_after_a_day_that_fails_unexpectedly(conn, strategy_id,
     monkeypatch.setattr(end_of_day, "match_fills", first_broken)
 
     reports = catch_up_audits(conn, FakeAuditBroker([fill_activity(buy)], positions={"AAPL": 10}), AFTER_CLOSE,
-                              CALENDAR, AuditWatch(), alert=alerts, note=notes)
+                              CALENDAR, AuditWatch(), alert=alerts, notify=notes)
 
     assert [(r.audit_date, r.status) for r in reports] == [
         (date(2026, 10, 29), "failed"), (date(2026, 10, 30), "pass"), (DAY, "pass")]
@@ -869,7 +871,7 @@ def test_catch_up_stops_when_the_database_connection_is_lost(conn, strategy_id, 
     stream(conn, buy_fill(at="2026-10-29T15:00:00Z"))
     monkeypatch.setattr(end_of_day, "insert_audit", broken_database)
 
-    reports = catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, note=notes)
+    reports = catch_up_audits(conn, FakeAuditBroker(), AFTER_CLOSE, CALENDAR, AuditWatch(), alert=alerts, notify=notes)
 
     assert [(r.audit_date, r.status) for r in reports] == [(date(2026, 10, 29), "failed")]
 
@@ -904,7 +906,7 @@ def test_re_audit_that_couldnt_read_an_activity_keeps_the_older_block(conn, stra
     stream(conn, buy)
     real = end_of_day.process_update
     monkeypatch.setattr(end_of_day, "process_update",
-                        lambda *args, **kwargs: HandleResult("failed", [("critical", "Couldn't handle a fill")]))
+                        lambda *args, **kwargs: HandleResult("failed", [("critical", "Couldn't handle a fill", None)]))
     audit(conn, FakeAuditBroker([fill_activity(buy), fill_activity(target)], positions={"AAPL": 0}), alerts, notes)
     monkeypatch.setattr(end_of_day, "process_update", real)
     unreadable_target = {"id": fill_activity(target)["id"], "activity_type": "FILL"}
@@ -1093,14 +1095,14 @@ def test_day_failing_on_its_data_alerts_once_across_catch_ups(conn, strategy_id,
     watch, broker = AuditWatch(), FakeAuditBroker([fill_activity(buy)], positions={"AAPL": 10})
 
     for _ in range(2):
-        catch_up_audits(conn, broker, AFTER_CLOSE, CALENDAR, watch, alert=alerts, note=notes)
+        catch_up_audits(conn, broker, AFTER_CLOSE, CALENDAR, watch, alert=alerts, notify=notes)
 
     assert sum("couldn't save" in message for message in alerts.sent) == 1
     assert not any("running again" in message for message in alerts.sent)
 
 def unhandled(*args, **kwargs):
     """Stand in for process_update and fail to handle the fill, with the handler's alert"""
-    return HandleResult("failed", [("critical", "Couldn't handle")])
+    return HandleResult("failed", [("critical", "Couldn't handle", None)])
 
 @pytest.mark.parametrize("failing", [unhandled, broken_match])
 def test_fill_that_stays_unrecorded_alerts_once_across_re_audits(conn, strategy_id, alerts, notes, monkeypatch,

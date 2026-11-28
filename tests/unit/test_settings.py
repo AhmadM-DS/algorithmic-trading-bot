@@ -1,6 +1,7 @@
 import pytest
 import os
-from config.settings import check_env_var, load_env_vars, get_market_data_profile, REQUIRED_ENV_VARS, SettingsError
+from config.settings import (check_env_var, load_env_vars, get_market_data_profile, MASK_ENV_VARS, REQUIRED_ENV_VARS,
+                             SettingsError)
 from config.constants import MARKET_DATA_PROFILES
 
 @pytest.fixture(autouse=True)
@@ -125,3 +126,13 @@ def test_unknown_market_data_plan():
     """Tests that a misspelled plan stops startup"""
     with pytest.raises(SettingsError):
         get_market_data_profile("delyaed", MARKET_DATA_PROFILES)
+
+def test_discord_bot_token_is_masked_but_optional():
+    """Mask the bot token everywhere, but start without it (critical falls back to the webhook)"""
+    assert "DISCORD_BOT_TOKEN" in MASK_ENV_VARS
+    assert "DISCORD_BOT_TOKEN" not in REQUIRED_ENV_VARS
+
+def test_only_the_critical_webhook_is_still_required():
+    """Require the critical webhook as the fallback, and no longer the trades and routine webhooks"""
+    hooks = [name for name in REQUIRED_ENV_VARS if name.startswith("DISCORD_")]
+    assert hooks == ["DISCORD_CRITICAL_HOOK"]

@@ -3,6 +3,9 @@ constants.py
 Global constants for the trading bot.
 """
 
+#Standard Library
+import os
+
 DEFAULT_FILTERS = {
     "price_min": 2,
     "price_max": 20,
@@ -27,6 +30,28 @@ MAX_TICKERS = 20
 UNATTENDED_UPGRADES_LOG_PATH = "/var/log/unattended-upgrades/unattended-upgrades.log"
 
 DISCORD_MENTION = "<@375084779256676353>"
+DISCORD_API_BASE = "https://discord.com/api/v10"
+DISCORD_MAX_MESSAGE_CHARS = 2000
+DISCORD_TIMEOUT_SECONDS = 5
+DISCORD_MAX_RETRY_SECONDS = 5
+NOTIFY_RETRY_BATCH = 10
+NOTIFY_FAILED_REPORT_TIME = "16:30"
+MARKET_TIME_ZONE = "America/New_York"
+PROCESSES = ("bot", "fill_stream")
+HEALTH_DISK_PATH = os.path.abspath(os.sep)
+# Channel IDs (Discord → right-click a channel → Copy Channel ID) as strings; None until the channel exists.
+# None sends critical through DISCORD_CRITICAL_HOOK and only logs the rest. "*" catches every kind not listed.
+DISCORD_ROUTES = {
+    environment: {
+        "critical": None, "audit": None, "health": None, "routine": None,
+        "trades": {"day": None, "swing": None, "options": None},
+        "shadowing": {"day": None, "swing": None, "options": None},
+        "summary_trades": {"day": None, "swing": None, "options": None},
+        "summary_shadow": {"day": None, "swing": None, "options": None},
+    }
+    for environment in ("live", "paper")
+}
+DISCORD_ROUTES["dev"] = {"critical": None, "*": None}
 MARKET_OPEN_TIME = "09:30"
 MARKET_CLOSE_TIME = "16:00"
 CLOSING_STATUS_TIME = "16:01"
@@ -96,8 +121,8 @@ AUDIT_CATCH_UP_MAX_DAYS = 30
 ACTIVITY_LOOKBACK_DAYS = 5
 AUDIT_REPEAT_MINUTES = 60
 CASH_TOLERANCE = 0.01
-SKIP_PRIORITY = ("shadow", "strategy_off", "kill_switch", "audit_mismatch", "audit_failure", "drawdown_limit",
-                 "daily_halt", "max_leverage", "buying_power", "budget_exhausted", "max_positions", "max_per_ticker",
-                 "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "invalid_exit_prices",
+SKIP_PRIORITY = ("shadow", "strategy_off", "kill_switch", "database_write_failed", "audit_mismatch", "audit_failure",
+                 "drawdown_limit", "daily_halt", "max_leverage", "buying_power", "budget_exhausted", "max_positions",
+                 "max_per_ticker", "max_positions_per_ticker", "cooldown", "zero_quantity", "max_order_size", "invalid_exit_prices",
                  "market_closed", "too_late_to_buy", "not_tradable", "open_order", "stale_price", "price_moved",
                  "nothing_to_sell")

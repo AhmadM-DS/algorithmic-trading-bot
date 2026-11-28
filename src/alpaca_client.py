@@ -6,8 +6,26 @@ Responsible for connecting to the Alpaca API.
 #Third Party Library
 from alpaca.trading.client import TradingClient
 from alpaca.data.historical.stock import StockHistoricalDataClient
-from execution.rate_limiter import RateLimiter, RateLimitedSession
+from execution.rate_limiter import ApiUsage, RateLimiter, RateLimitedSession
 
+
+def api_usage(client) -> ApiUsage:
+    """Return a client's Alpaca call counts for monitoring
+
+    Parameters:
+        client: A client built by create_alpaca_trading_client or create_alpaca_shd_client
+
+    Returns:
+        An ApiUsage (calls in the last window, total calls, Alpaca's last remaining count)
+
+    Raises:
+        TypeError if the client has no rate limiter, since its calls aren't counted
+    """
+    session = getattr(client, "_session", None)
+    if not isinstance(session, RateLimitedSession):
+        raise TypeError(f"{type(client).__name__} has no rate limiter (session {type(session).__name__}). "
+                        f"Expected a client built through alpaca_client")
+    return session.usage()
 
 def _attach_limiter(client):
     if hasattr(client, "_session"):

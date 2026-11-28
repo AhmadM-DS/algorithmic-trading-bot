@@ -9,7 +9,8 @@ from logger import trades_log
 from risk.context import RiskContext
 from risk.decisions import Decision, RiskRequest
 from risk.guardrails import (check_audit_failure, check_audit_mismatch, check_budget, check_buying_power,
-                             check_cooldown, check_daily_halt, check_drawdown, check_kill_switch, check_leverage,
+                             check_cooldown, check_daily_halt, check_database_write, check_drawdown,
+                             check_kill_switch, check_leverage,
                              check_max_positions, check_mode, check_order_size, check_positions_per_ticker,
                              check_quantity, check_ticker_exposure, cooldown_parameter)
 from risk.sizers import SIZERS
@@ -18,6 +19,7 @@ GUARDRAILS = {
     "day": (
         check_mode,
         check_kill_switch,
+        check_database_write,
         check_audit_mismatch,
         check_audit_failure,
         check_drawdown,
