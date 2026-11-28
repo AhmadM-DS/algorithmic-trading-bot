@@ -6,12 +6,14 @@ Apply one TradeUpdate to the database: the order's status, its trades row and th
 #Standard Library
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
 #Local Imports
 from config.constants import UNKNOWN_ORDER_WAIT_SECONDS
 from data.market_calendar import NEW_YORK
 from logger import trades_log
+from notifications import feed
 from storage.connections import is_duplicate_error
 from storage.fills import (TICKER_LENGTH, UNTRACKED_PREFIX, add_to_position, close_position, fill_seen,
                            find_order_row, fits_ticker, get_entry_defaults, get_open_positions_for_ticker,
@@ -24,6 +26,12 @@ from storage.watchlist import get_or_create_ticker
 MANUAL = "manual"
 LATE_REJECTION = "Rejected by Alpaca after it was accepted (the stream gives no reason)"
 
+class Alert(NamedTuple):
+    """One message to send after the commit: kind and asset as notifications.send takes them"""
+    kind: str
+    message: str
+    asset: str | None = None
+
 @dataclass
 class HandleResult:
     """What handling one update did, plus the alerts to send once it's committed
@@ -32,7 +40,7 @@ class HandleResult:
     "no_order" (a non-fill event for an order the bot doesn't have), "unresolved" (needs a person; alerted),
     "failed" (an error; rolled back and retried), "untracked" (a symbol too long to record, e.g. an option; kept
     raw only).
-    alerts is a list of (channel, message), channel "critical" or "trades".
+    alerts is a list of Alert: "critical", or "trades" with the position's holding type as the asset.
     """
     outcome: str
     alerts: list = field(default_factory=list)
@@ -85,13 +93,13 @@ def _position_for_manual_sell(conn, order: dict, update, alerts: list) -> int | 
     """Pick the position a manual sell takes shares from: a manual one first, else the oldest open one"""
     positions = get_open_positions_for_ticker(conn, order["ticker_id"])
     if not positions:
-        alerts.append(("critical", f"Manual sell of {update.fill_quantity} {update.ticker} "
+        alerts.append(Alert("critical", f"Manual sell of {update.fill_quantity} {update.ticker} "
                                    f"({update.alpaca_order_id}), but no open position holds {update.ticker}. "
                                    "Not recorded as a trade; fix by hand."))
         return None
     first = positions[0]
     if first["shares_held"] < update.fill_quantity:
-        alerts.append(("critical", f"Manual sell of {update.fill_quantity} {update.ticker} "
+        alerts.append(Alert("critical", f"Manual sell of {update.fill_quantity} {update.ticker} "
                                    f"({update.alpaca_order_id}) is more than position {first['position_id']} "
                                    f"({first['strategy']}, {first['shares_held']} shares) holds, so it spans "
                                    "positions. Not recorded as a trade; fix by hand. Buys stay blocked until the "
@@ -108,13 +116,13 @@ def _record_sell_fill(conn, order: dict, update, alerts: list):
             return "unresolved"
         set_order_position(conn, order["order_id"], position_id)
     if position_id is None:
-        alerts.append(("critical", f"Sell fill for {order['client_order_id']} ({update.fill_quantity} "
+        alerts.append(Alert("critical", f"Sell fill for {order['client_order_id']} ({update.fill_quantity} "
                                    f"{update.ticker}) has no position to close. Not recorded as a trade; "
                                    "fix by hand."))
         return "unresolved"
     exit_reason = order["exit_reason"]
     if exit_reason is None:
-        alerts.append(("critical", f"Sell fill for {order['client_order_id']} ({update.fill_quantity} "
+        alerts.append(Alert("critical", f"Sell fill for {order['client_order_id']} ({update.fill_quantity} "
                                    f"{update.ticker}) has no exit_reason on its order. Not recorded as a trade; "
                                    "fix by hand."))
         return "unresolved"
@@ -131,7 +139,7 @@ def _record_sell_fill(conn, order: dict, update, alerts: list):
         close_position(conn, position_id, update.event_at, exit_reason, realized_pnl)
         trades_log.info(f"Closed position {position_id} ({update.ticker}, {exit_reason}): {realized_pnl:+.2f}")
     elif totals["shares_held"] < 0:
-        alerts.append(("critical", f"Position {position_id} ({update.ticker}) now shows "
+        alerts.append(Alert("critical", f"Position {position_id} ({update.ticker}) now shows "
                                    f"{totals['shares_held']} shares after selling {update.fill_quantity}. "
                                    "More was sold than bought; check it by hand."))
     return "handled"
@@ -140,11 +148,11 @@ def _status_alerts(conn, order: dict, update, alerts: list):
     """Add alerts for a late rejection or a bracket leg that expired while its position is still open"""
     if update.event_type == "rejected":
         save_rejection(conn, order["order_id"], LATE_REJECTION)
-        alerts.append(("critical", f"Order {order['client_order_id']} ({update.side} {update.ticker}) was "
+        alerts.append(Alert("critical", f"Order {order['client_order_id']} ({update.side} {update.ticker}) was "
                                    "rejected by Alpaca after it was accepted."))
     if (update.status == "expired" and order["parent_order_id"] is not None and order["position_id"] is not None
             and get_position(conn, order["position_id"])["status"] == "open"):
-        alerts.append(("critical", f"The {order['order_type']} leg of position {order['position_id']} "
+        alerts.append(Alert("critical", f"The {order['order_type']} leg of position {order['position_id']} "
                                    f"({update.ticker}) expired while the position is still open: it has no "
                                    "stop at Alpaca now."))
 
@@ -175,8 +183,9 @@ def handle_update(conn, update, now: datetime, wait_seconds: int = UNKNOWN_ORDER
         if now - update.event_at < timedelta(seconds=wait_seconds):
             return HandleResult("waiting")
         order = _record_manual_order(conn, update)
-        alerts.append(("trades", f"Manual trade recorded: {update.side} {update.fill_quantity} {update.ticker} "
-                                 f"@ {update.fill_price} ({update.alpaca_order_id})"))
+        _, holding_type = get_entry_defaults(conn, order["strategy_id"], order["signal_id"])
+        alerts.append(Alert("trades", f"Manual trade recorded: {update.side} {update.fill_quantity} {update.ticker} "
+                                      f"@ {update.fill_price} ({update.alpaca_order_id})", feed(holding_type)))
 
     update_order_from_broker(conn, order["order_id"], update.alpaca_order_id, update.status,
                              update.filled_quantity, update.filled_price)
@@ -226,7 +235,7 @@ def _keep_untracked(conn, update, save_raw: bool) -> HandleResult:
                        f"symbol doesn't fit the ticker columns ({TICKER_LENGTH} characters)")
     if not update.is_fill or already_seen:
         return HandleResult("untracked")
-    return HandleResult("untracked", [("critical", _untracked_alert(update))])
+    return HandleResult("untracked", [Alert("critical", _untracked_alert(update))])
 
 def process_update(conn, update, now: datetime, save_raw: bool = True,
                    wait_seconds: int = UNKNOWN_ORDER_WAIT_SECONDS) -> HandleResult:
@@ -265,7 +274,7 @@ def process_update(conn, update, now: datetime, save_raw: bool = True,
             return HandleResult("duplicate")
         trades_log.error(f"Couldn't handle {update.event_type} for {update.alpaca_order_id} ({update.ticker}): "
                          f"{error}")
-        return HandleResult("failed", [("critical", f"Couldn't handle a {update.event_type} for {update.ticker} "
+        return HandleResult("failed", [Alert("critical", f"Couldn't handle a {update.event_type} for {update.ticker} "
                                                     f"({update.alpaca_order_id}): {error}. Saved raw; "
                                                     "retried every minute.")])
     if result.outcome not in ("handled", "duplicate"):

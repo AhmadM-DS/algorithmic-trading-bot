@@ -15,13 +15,13 @@ class SettingsError(Exception):
     """Raised when there is missing or empty environment variable(s)"""
 
 REQUIRED_ENV_VARS = ["DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_TRUST_SERVER_CERT",
-                    "DISCORD_CRITICAL_HOOK", "DISCORD_TRADES_HOOK", "DISCORD_ROUTINE_HOOK",
+                    "DISCORD_CRITICAL_HOOK",
                     "FMP_API_KEY"]
 
 MASK_ENV_VARS = ["ALPACA_API_KEY_PAPER", "ALPACA_SECRET_KEY_PAPER",
                  "ALPACA_API_KEY_LIVE", "ALPACA_SECRET_KEY_LIVE",
                 "DB_USER", "DB_PASSWORD",
-                "DISCORD_CRITICAL_HOOK", "DISCORD_TRADES_HOOK", "DISCORD_ROUTINE_HOOK",
+                "DISCORD_CRITICAL_HOOK", "DISCORD_TRADES_HOOK", "DISCORD_ROUTINE_HOOK", "DISCORD_BOT_TOKEN",
                 "FMP_API_KEY"]
 
 ALLOWED_EMPTY_ENV_VARS = ["DB_PASSWORD"]

@@ -73,7 +73,13 @@ ALLOWED_COLUMNS = [("strategies", "strategy_id, strategy, time_frame, default_ho
                    ("cash_adjustments", "cash_adjustment_id, effective_date, reason, note, created_at"),
                    ("health_status", "health_status_id, recorded_at, cpu_pct, memory_pct, disk_pct, cycle_seconds, "
                                      "tickers_checked, tickers_bad, api_calls, rate_limit_remaining, errors, "
-                                     "db_used_mb, db_max_mb")]
+                                     "db_used_mb, db_max_mb, process"),
+                   ("health_status_hourly", "health_status_hourly_id, process, hour_start, beats, cycles, "
+                                            "cpu_pct_min, cpu_pct_avg, cpu_pct_max, memory_pct_min, memory_pct_avg, "
+                                            "memory_pct_max, disk_pct_min, disk_pct_avg, disk_pct_max, "
+                                            "cycle_seconds_min, cycle_seconds_avg, cycle_seconds_max, api_calls_max, "
+                                            "rate_limit_remaining_min, errors, db_used_mb_max, db_max_mb, "
+                                            "rolled_up_at")]
 
 BLOCKED_TABLES = ["payment_methods", "subscriptions", "expenses"]
 

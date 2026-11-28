@@ -144,7 +144,7 @@ def _scale_down_events(context: RiskContext, latest: str | None, events: list):
                                 f"The live budgets add up to more than the account (${context.equity:.2f} x "
                                 f"{MAX_LEVERAGE}); every live budget is scaled to {context.scale_down:.0%}."))
     elif context.scale_down >= 1.0 and latest == SCALE_DOWN_STARTED:
-        events.append(RiskEvent(SCALE_DOWN_STOPPED, None, "trades",
+        events.append(RiskEvent(SCALE_DOWN_STOPPED, None, "health",
                                 "The account covers every live budget again; budgets are back to full size."))
 
 def _daily_halts(state: StrategyState, locked: set, events: list) -> frozenset:
@@ -156,7 +156,7 @@ def _daily_halts(state: StrategyState, locked: set, events: list) -> frozenset:
         tripped = budget > 0 and (pnl <= -limits["loss"] * budget or pnl >= limits["profit"] * budget)
         is_locked = (daily_halt_event(holding_type), state.strategy_id) in locked
         if tripped and not is_locked:
-            events.append(RiskEvent(daily_halt_event(holding_type), state.strategy_id, "trades",
+            events.append(RiskEvent(daily_halt_event(holding_type), state.strategy_id, "health",
                                     f"Daily halt: {state.name} {holding_type} trades are {pnl:+.2f} today "
                                     f"({pnl / budget:+.1%} of ${budget:.2f}; limits -{limits['loss']:.0%} / "
                                     f"+{limits['profit']:.0%}). No new {holding_type} buys until tomorrow."))
@@ -182,11 +182,11 @@ def _budget_events(state: StrategyState, context: RiskContext, latest: str | Non
     slot = state.trading_budget * fraction
     room = state.trading_budget - context.exposure(strategy_id=state.strategy_id)
     if room < slot and latest != BUDGET_FULL:
-        events.append(RiskEvent(BUDGET_FULL, state.strategy_id, "trades",
+        events.append(RiskEvent(BUDGET_FULL, state.strategy_id, "health",
                                 f"{state.name}: less than one full slot left (${room:.2f} of ${state.trading_budget:.2f}, "
                                 f"a slot is ${slot:.2f}); most buys will be skipped until a position closes."))
     elif room >= slot and latest == BUDGET_FULL:
-        events.append(RiskEvent(BUDGET_ROOM, state.strategy_id, "trades",
+        events.append(RiskEvent(BUDGET_ROOM, state.strategy_id, "health",
                                 f"{state.name}: room for a full slot again (${room:.2f} of ${state.trading_budget:.2f})."))
 
 def build_context(conn, broker, now: datetime, trading_mode: str) -> RiskContext:

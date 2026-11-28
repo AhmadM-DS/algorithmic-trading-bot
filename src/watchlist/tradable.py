@@ -5,7 +5,7 @@ Keep tickers.is_active matching what Alpaca can trade: once a day from the asset
 
 #Local Imports
 from logger import trades_log
-from notifications import send_trades
+from notifications import send
 from storage.events import insert_bot_event
 from storage.watchlist import get_ticker_states, set_ticker_active
 
@@ -13,7 +13,7 @@ TICKER_NOT_TRADABLE = "ticker_not_tradable"
 TICKER_TRADABLE = "ticker_tradable"
 NOT_TRADABLE_PHRASES = ("not tradable", "not active")
 
-def sync_tradable(conn, tradable: set, alert=send_trades) -> dict:
+def sync_tradable(conn, tradable: set, notify=send) -> dict:
     """Set is_active for every saved ticker from Alpaca's list, both ways, and note each change once
 
     The bot owns is_active (= Alpaca can trade it); the admin's fill_override is never touched. An empty list
@@ -22,7 +22,7 @@ def sync_tradable(conn, tradable: set, alert=send_trades) -> dict:
     Parameters:
         conn (Connection): An open database connection
         tradable (set): Every symbol Alpaca can trade, from AlpacaBroker.get_tradable_tickers
-        alert (callable): Sends the trades-channel note; Discord by default
+        notify (callable): Sends (kind, message) like notifications.send; the note goes to health
 
     Returns:
         {"off": tickers switched off, "on": tickers switched back on}, each sorted
@@ -44,7 +44,7 @@ def sync_tradable(conn, tradable: set, alert=send_trades) -> dict:
         message = (f"Tradable tickers updated from Alpaca. Off: {', '.join(off) or 'none'}. "
                    f"Back on: {', '.join(on) or 'none'}.")
         trades_log.info(message)
-        alert(message)
+        notify("health", message)
     return {"off": off, "on": on}
 
 def is_not_tradable_rejection(reason: str) -> bool:

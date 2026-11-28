@@ -11,7 +11,8 @@ from risk.context import OpenPosition, RecentExit, RiskContext, StrategyState
 from risk.decisions import RiskRequest
 from audit import ShareCounts
 from risk.guardrails import (check_audit_failure, check_audit_mismatch, check_budget, check_buying_power,
-                             check_cooldown, check_daily_halt, check_drawdown, check_kill_switch, check_leverage,
+                             check_cooldown, check_daily_halt, check_database_write, check_drawdown,
+                             check_kill_switch, check_leverage,
                              check_max_positions, check_mode, check_order_size, check_positions_per_ticker,
                              check_quantity, check_ticker_exposure, cooldown_parameter)
 from strategies.signals import Signal
@@ -380,6 +381,22 @@ def test_open_audit_failure_leaves_other_tickers_alone():
     context = _context(audit_failure_tickers=frozenset({"ABC"}))
 
     reason = check_audit_failure(_buy("AAPL"), context, 5)
+
+    assert reason is None
+
+def test_failed_database_write_blocks_every_buy():
+    """Block a buy with "database_write_failed" while any of the bot's own saves is failing"""
+    context = _context(failed_writes=frozenset({"signals"}))
+
+    reason = check_database_write(_buy("AAPL"), context, 5)
+
+    assert reason == "database_write_failed"
+
+def test_no_failed_database_write_lets_buys_through():
+    """Let a buy through when every save is working"""
+    context = _context()
+
+    reason = check_database_write(_buy("AAPL"), context, 5)
 
     assert reason is None
 

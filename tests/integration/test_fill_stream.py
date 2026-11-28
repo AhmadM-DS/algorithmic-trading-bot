@@ -57,9 +57,10 @@ def sent():
     return []
 
 def make_stream(conn, sent, broker=None):
-    channels = {"critical": lambda text: sent.append(("critical", text)),
-                "trades": lambda text: sent.append(("trades", text))}
-    return FillStream(broker or SilentBroker(), connect=lambda: conn, alert_channels=channels)
+    def notify(kind, text, asset=None):
+        sent.append((kind, text))
+
+    return FillStream(broker or SilentBroker(), connect=lambda: conn, notify=notify)
 
 def test_message_is_saved_and_handled(bot_conn, sent):
     """Turn a stream fill into its raw row, trade and position with no alerts"""
@@ -95,8 +96,8 @@ def test_each_alert_is_sent_once_per_run(sent):
     """Send a repeated alert (a fill retried every minute) only the first time"""
     stream = make_stream(BrokenConnection(), sent)
 
-    stream.send_alerts([("critical", "same problem")])
-    stream.send_alerts([("critical", "same problem")])
+    stream.send_alerts([("critical", "same problem", None)])
+    stream.send_alerts([("critical", "same problem", None)])
 
     assert sent == [("critical", "same problem")]
 

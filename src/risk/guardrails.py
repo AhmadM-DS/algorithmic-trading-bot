@@ -46,6 +46,19 @@ def check_kill_switch(request: RiskRequest, context: RiskContext, quantity: int)
     """
     return "kill_switch" if context.kill_switch else None
 
+def check_database_write(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
+    """Block every buy while one of the bot's own saves is failing, until that same save works again
+
+    Parameters:
+        request (RiskRequest): The buy being checked
+        context (RiskContext): This cycle's snapshot
+        quantity (int): The sizer's share count
+
+    Returns:
+        "database_write_failed" if any save is failing, None otherwise
+    """
+    return "database_write_failed" if context.failed_writes else None
+
 def check_audit_mismatch(request: RiskRequest, context: RiskContext, quantity: int) -> str | None:
     """Block buys of a ticker whose shares at Alpaca and in the database differ, until they match again
 

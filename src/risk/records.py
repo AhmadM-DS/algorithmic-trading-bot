@@ -8,13 +8,13 @@ import math
 
 #Local Imports
 from logger import trades_log
-from notifications import send_critical, send_trades
+from notifications import send
 from risk.context import RiskContext
 from risk.decisions import Decision, RiskRequest
 from storage.events import insert_bot_event
 from storage.risk import insert_risk_decision, insert_risk_decision_parameter
 
-def record_risk_events(conn, context: RiskContext, alert_channels: dict = None) -> int:
+def record_risk_events(conn, context: RiskContext, notify=send) -> int:
     """Save a bot_events row for each state that started this cycle, then send its alert once
 
     The row is what locks a halt and stops the alert repeating next cycle, so the alerts go out only after
@@ -23,21 +23,20 @@ def record_risk_events(conn, context: RiskContext, alert_channels: dict = None) 
     Parameters:
         conn (Connection): An open database connection; this function commits
         context (RiskContext): This cycle's snapshot from build_context
-        alert_channels (dict): {"critical": send, "trades": send}; Discord if None
+        notify (callable): Sends (kind, message) like notifications.send; Discord by default
 
     Returns:
         How many events were saved
     """
     if not context.events:
         return 0
-    channels = alert_channels or {"critical": send_critical, "trades": send_trades}
     for event in context.events:
         insert_bot_event(conn, event.event_type, event.message, event.strategy_id)
     conn.commit()
     for event in context.events:
         log = trades_log.warning if event.channel == "critical" else trades_log.info
         log(event.message)
-        channels[event.channel](event.message)
+        notify(event.channel, event.message)
     return len(context.events)
 
 def save_risk_decision(conn, signal_id: int, request: RiskRequest, decision: Decision, context: RiskContext) -> int:

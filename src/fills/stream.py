@@ -18,9 +18,9 @@ from config.constants import CATCH_UP_SECONDS
 from execution.broker import BrokerUnavailable
 from fills.catch_up import catch_up
 from fills.events import from_stream
-from fills.handler import process_update
+from fills.handler import Alert, process_update
 from logger import trades_log
-from notifications import send_critical, send_trades
+from notifications import send
 from storage.connections import get_connection
 from storage.events import insert_bot_event
 from storage.fills import save_broker_event
@@ -37,7 +37,7 @@ class FillStream:
     """
 
     def __init__(self, broker, api_key: str = None, secret_key: str = None, paper: bool = True,
-                 connect=get_connection, alert_channels: dict = None):
+                 connect=get_connection, notify=send):
         """Set up the stream and the catch-up
 
         Parameters:
@@ -46,11 +46,11 @@ class FillStream:
             secret_key (str): Alpaca secret for the stream
             paper (bool): True for the paper account's stream
             connect (callable): Opens a database connection
-            alert_channels (dict): {"critical": send, "trades": send}; Discord if None
+            notify (callable): Sends (kind, message, asset) like notifications.send; Discord by default
         """
         self.broker = broker
         self.connect = connect
-        self.alert_channels = alert_channels or {"critical": send_critical, "trades": send_trades}
+        self.notify = notify
         self.alerted = set()
         self.stream_conn = None
         self.stream = None
@@ -62,12 +62,12 @@ class FillStream:
         """Send each alert once per run, so a fill retried every minute doesn't repeat its alert
 
         Parameters:
-            alerts (list): (channel, message) pairs, channel "critical" or "trades"
+            alerts (list): Alert(kind, message, asset) tuples
         """
-        for channel, message in alerts:
+        for kind, message, asset in alerts:
             if message not in self.alerted:
                 self.alerted.add(message)
-                self.alert_channels[channel](message)
+                self.notify(kind, message, asset)
 
     def _stream_connection(self):
         """Return the stream thread's connection, opening it if needed"""
@@ -100,7 +100,7 @@ class FillStream:
         except pyodbc.Error as error:
             self._drop_stream_connection()
             trades_log.error(f"Couldn't save {update.event_type} for {update.alpaca_order_id}: {error}")
-            self.send_alerts([("critical", f"The fill stream couldn't save a {update.event_type} for "
+            self.send_alerts([Alert("critical", f"The fill stream couldn't save a {update.event_type} for "
                                            f"{update.ticker} ({update.alpaca_order_id}): {error}. "
                                            "The catch-up will look for it every minute.")])
             return
@@ -117,7 +117,7 @@ class FillStream:
         except pyodbc.Error as error:
             self._drop_stream_connection()
             trades_log.error(f"Couldn't save an unreadable trade update: {error}")
-        self.send_alerts([("critical", f"The fill stream got a message it couldn't read (event "
+        self.send_alerts([Alert("critical", f"The fill stream got a message it couldn't read (event "
                                        f"{data.get('event')!r}); saved raw in broker_events.")])
 
     async def _on_message(self, message: dict):
@@ -128,7 +128,7 @@ class FillStream:
         try:
             conn = self.connect()
         except pyodbc.Error as error:
-            self.send_alerts([("critical", f"The fill stream can't reach the database for its catch-up: {error}")])
+            self.send_alerts([Alert("critical", f"The fill stream can't reach the database for its catch-up: {error}")])
             return
         try:
             result = catch_up(conn, self.broker, _utc_now())
@@ -142,7 +142,7 @@ class FillStream:
             trades_log.warning(f"Catch-up skipped, Alpaca didn't answer: {error}")
         except Exception as error:
             trades_log.error(f"Catch-up failed: {type(error).__name__}: {error}")
-            self.send_alerts([("critical", f"The fill stream's catch-up failed ({type(error).__name__}: {error}). "
+            self.send_alerts([Alert("critical", f"The fill stream's catch-up failed ({type(error).__name__}: {error}). "
                                            "It tries again every minute.")])
         finally:
             conn.close()
@@ -165,5 +165,5 @@ class FillStream:
             self.catch_up_once()
             time.sleep(catch_up_seconds)
         trades_log.critical("The trade-updates stream stopped; exiting so the process restarts")
-        self.send_alerts([("critical", "The fill stream's listener stopped; the process is exiting to restart.")])
+        self.send_alerts([Alert("critical", "The fill stream's listener stopped; the process is exiting to restart.")])
         raise SystemExit(1)

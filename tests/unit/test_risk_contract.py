@@ -218,6 +218,30 @@ def test_share_mismatch_skips_buys_of_that_ticker():
 
     assert decision.failed_checks[:2] == ("kill_switch", "audit_mismatch")
 
+def test_failed_database_write_skips_buys_between_kill_switch_and_share_mismatch():
+    """Skip a buy with "database_write_failed" while a save is failing, ranked after the kill switch and before
+    "audit_mismatch" """
+    context = _context()
+    blocked = RiskContext(as_of=context.as_of, equity=context.equity, buying_power=context.buying_power,
+                          strategies=context.strategies, open_positions=(), recent_exits=(), broker_positions=(),
+                          kill_switch=True, share_mismatches={"AAPL": ShareCounts(alpaca=5, database=0)},
+                          failed_writes=frozenset({"signals"}))
+
+    decision = decide(_request(), blocked)
+
+    assert decision.failed_checks[:3] == ("kill_switch", "database_write_failed", "audit_mismatch")
+
+def test_failed_database_write_never_blocks_a_sell():
+    """Sell while a save is failing: a database problem stops buys only"""
+    context = RiskContext(as_of=UTC_NOW, equity=1000.0, buying_power=1000.0, strategies=_context().strategies,
+                          open_positions=(_held(LIVE, "AAPL", 5, 10.0),), recent_exits=(),
+                          broker_positions=(BrokerPosition(ticker="AAPL", shares=5),),
+                          failed_writes=frozenset({"signals"}))
+
+    decision = decide(_request(side="sell"), context)
+
+    assert (decision.approved_quantity, decision.skip_reason) == (5, None)
+
 def test_open_audit_failure_skips_buys_of_that_ticker_after_a_share_mismatch():
     """Skip a buy with "audit_failure" while an audit failure on its ticker is open, ranked right after
     "audit_mismatch" """

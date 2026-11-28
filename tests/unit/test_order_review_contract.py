@@ -71,6 +71,14 @@ def test_risk_and_order_failures_are_merged_in_priority_order():
 
     assert review.decision.failed_checks == ("kill_switch", "market_closed", "not_tradable")
 
+def test_failed_database_write_merges_with_order_failures():
+    """Merge "database_write_failed" with the order checks' failures, ranked after the kill switch"""
+    context = replace(_context(kill_switch=True), failed_writes=frozenset({"signals"}))
+
+    review = review_order(_request(), context, _facts(session=(None, None)))
+
+    assert review.decision.failed_checks == ("kill_switch", "database_write_failed", "market_closed")
+
 def test_stale_price_skips_and_sizes_at_the_signal_price():
     review = review_order(_request(), _context(), _facts(seconds_old=600))
 

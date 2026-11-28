@@ -13,10 +13,9 @@ from decimal import Decimal
 import pandas as pd
 
 #Local Imports
+from errors import UNREADABLE_ERRORS
 from storage.connections import to_db_time
 from storage.fills import ACTIVITY_FILL_TYPES, FILL_EVENT_TYPES
-
-UNREADABLE_ERRORS = (KeyError, TypeError, ValueError, ArithmeticError, AttributeError)
 
 @dataclass(frozen=True)
 class TradeUpdate:

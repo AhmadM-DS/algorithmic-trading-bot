@@ -25,7 +25,8 @@ class ParameterValue:
 class RiskEvent:
     """A risk state that started this cycle (or stopped, for states that don't lock), to save and alert once
 
-    channel is "critical" or "trades"; strategy_id is None for an account-wide state.
+    channel is the notifications kind: "critical", or "health" for a strategy state to look at today; strategy_id
+    is None for an account-wide state.
     """
     event_type: str
     strategy_id: int | None
@@ -131,6 +132,8 @@ class RiskContext:
     are buy orders not filled yet; exposure and position counts include them. share_mismatches holds every ticker
     whose shares at Alpaca and in the database differ this cycle ({ticker: ShareCounts}); their buys are blocked.
     audit_failure_tickers holds every ticker with an open end-of-day audit failure; their buys are blocked too.
+    failed_writes names each of the bot's own saves that is failing (e.g. "signals"); while any is, every buy is
+    blocked. A name leaves only when that same save succeeds again.
     """
     as_of: datetime
     equity: float
@@ -148,6 +151,7 @@ class RiskContext:
     pending_buys: tuple[PendingBuy, ...] = ()
     share_mismatches: dict = field(default_factory=dict)
     audit_failure_tickers: frozenset = frozenset()
+    failed_writes: frozenset = frozenset()
 
     def __post_init__(self):
         """Reject a naive as_of time"""

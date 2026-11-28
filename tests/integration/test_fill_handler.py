@@ -177,7 +177,7 @@ def test_old_unknown_fill_is_recorded_as_a_manual_trade(bot_conn):
     assert (result.outcome, manual_order.strategy, manual_order.status, manual_order.position_id) == \
            ("handled", "manual", "filled", position.position_id)
     assert (position.entry_quantity, position.holding_type, position.time_frame) == (3, "swing", "none")
-    assert result.alerts == [("trades", "Manual trade recorded: buy 3 AAPL @ 5.01 (alpaca-dashboard-1)")]
+    assert result.alerts == [("trades", "Manual trade recorded: buy 3 AAPL @ 5.01 (alpaca-dashboard-1)", "swing")]
 
 def test_manual_sell_closes_the_oldest_bot_position_as_manual(bot_conn, strategy_id):
     """Take a dashboard 'Close position' from the bot's oldest open position, with exit_reason manual"""
@@ -198,7 +198,7 @@ def test_manual_sell_spanning_two_positions_is_not_recorded(bot_conn, strategy_i
 
     assert result.outcome == "unresolved"
     assert [t.side for t in trades(bot_conn)] == ["buy"]
-    assert any(channel == "critical" and "spans positions" in text for channel, text in result.alerts)
+    assert any(channel == "critical" and "spans positions" in text for channel, text, _ in result.alerts)
 
 def test_bot_sell_without_an_exit_reason_is_not_recorded(bot_conn, strategy_id):
     """Alert instead of closing a position with no reason (a sell saved before migration 007)"""
@@ -309,8 +309,9 @@ def test_option_fill_is_saved_raw_as_untracked_and_alerted_once(bot_conn):
     assert result.outcome == "untracked"
     assert (raw_events(conn), conn.commits) == ([("untracked_fill", None, "alpaca-opt-1")], 1)
     assert (trades(conn), positions(conn)) == ([], [])
-    (channel, message), = result.alerts
-    assert channel == "critical" and all(part in message for part in (OPTION, "alpaca-opt-1", "exec-opt"))
+    (kind, message, asset), = result.alerts
+    assert (kind, asset) == ("critical", None)
+    assert all(part in message for part in (OPTION, "alpaca-opt-1", "exec-opt"))
 
 def test_two_fills_of_the_same_option_alert_with_different_text(bot_conn):
     """Give each option fill its own alert text, so the stream's once-per-text guard can't swallow a later fill"""

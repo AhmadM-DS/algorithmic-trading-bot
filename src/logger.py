@@ -73,5 +73,35 @@ routine_log = get_logger("routine")
 db_log = get_logger("db")
 api_log = get_logger("api")
 
+class ChangeLog:
+    """Log a problem once when it starts and once when it ends, per key, never on every check (alert on change)"""
+
+    def __init__(self, log):
+        self.log = log
+        self.failing = set()
+
+    def __contains__(self, key) -> bool:
+        return key in self.failing
+
+    def failed(self, key, message: str) -> bool:
+        """Log message as a warning if key wasn't failing yet; return True when this call logged"""
+        if key in self.failing:
+            return False
+        self.log.warning(message)
+        self.failing.add(key)
+        return True
+
+    def recovered(self, key, message: str) -> bool:
+        """Log message as info if key was failing; return True when this call logged"""
+        if key not in self.failing:
+            return False
+        self.log.info(message)
+        self.failing.discard(key)
+        return True
+
+    def clear(self):
+        """Forget every failure, so each is logged again the next time"""
+        self.failing.clear()
+
 # Temporary: old modules log here until they are rewritten. Delete once nothing imports it.
 legacy_log = get_logger("legacy")
