@@ -39,19 +39,50 @@ NOTIFY_FAILED_REPORT_TIME = "16:30"
 MARKET_TIME_ZONE = "America/New_York"
 PROCESSES = ("bot", "fill_stream")
 HEALTH_DISK_PATH = os.path.abspath(os.sep)
-# Channel IDs (Discord → right-click a channel → Copy Channel ID) as strings; None until the channel exists.
+# Channel IDs (Discord → right-click a channel → Copy Channel ID) as quoted strings; None until the channel exists.
 # None sends critical through DISCORD_CRITICAL_HOOK and only logs the rest. "*" catches every kind not listed.
 DISCORD_ROUTES = {
-    environment: {
-        "critical": None, "audit": None, "health": None, "routine": None,
-        "trades": {"day": None, "swing": None, "options": None},
-        "shadowing": {"day": None, "swing": None, "options": None},
-        "summary_trades": {"day": None, "swing": None, "options": None},
-        "summary_shadow": {"day": None, "swing": None, "options": None},
-    }
-    for environment in ("live", "paper")
+    "live": {
+        "critical": "1576060282940424302",
+        "audit": "1576060303244791828",
+        "health": "1576060338233671843",
+        "routine": "1576060365312237719",
+        "trades": {"day": "1576060480819036320",
+                   "swing": "1576060716912345098",
+                   "options": "1576060911100371065"},
+        "shadowing": {"day": "1576060509294174228",
+                      "swing": "1576060781647368373",
+                      "options": "1576060979559661708"},
+        "summary_trades": {"day": "1576060542408327249",
+                           "swing": "1576060814480249015",
+                           "options": "1576061133901533194"},
+        "summary_shadow": {"day": "1576060575895785613",
+                           "swing": "1576060846847823882",
+                           "options": "1576061170094186496"},
+    },
+    "paper": {
+        "critical": "1576061283105644585",
+        "audit": "1576061302470606978",
+        "health": "1576061320195870781",
+        "routine": "1576061337862152374",
+        "trades": {"day": "1576061399237394582",
+                   "swing": "1576061639193788596",
+                   "options": "1576061798988382269"},
+        "shadowing": {"day": "1576061421542969466",
+                      "swing": "1576061679739863072",
+                      "options": "1576061827169910897"},
+        "summary_trades": {"day": "1576061444682944577",
+                           "swing": "1576061717509574807",
+                           "options": "1576061852063109240"},
+        "summary_shadow": {"day": "1576061483207499908",
+                           "swing": "1576061762917241052",
+                           "options": "1576061888150904882"},
+    },
+    "dev": {
+        "critical": "1576060229752332288",
+        "*": "1576060248127447131",
+    },
 }
-DISCORD_ROUTES["dev"] = {"critical": None, "*": None}
 MARKET_OPEN_TIME = "09:30"
 MARKET_CLOSE_TIME = "16:00"
 CLOSING_STATUS_TIME = "16:01"
